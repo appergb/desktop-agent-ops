@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# State files (generated at runtime)
+setup_state.json
+permissions.json
+
+# Temp files
+*.tmp
+*.bak
+
+# Screenshots (generated at runtime)
+*.png
+!references/*.png
