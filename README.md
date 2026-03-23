@@ -110,17 +110,17 @@ The core innovation: **always scope to the target app window before OCR**.
 
 ### As an AI Agent Skill
 
-1. Copy `SKILL.md`, `scripts/`, and `references/` to your skill directory
+1. Copy the `skill/` directory to your skill location (or install via ClawHub)
 2. The agent auto-runs `first_run_setup.py` on first use — **zero manual setup**
 
 ### Manual Usage
 
 ```bash
 # One-command setup (installs EVERYTHING)
-python3 scripts/first_run_setup.py
+python3 skill/scripts/first_run_setup.py
 
 # Check readiness
-python3 scripts/first_run_setup.py --check
+python3 skill/scripts/first_run_setup.py --check
 
 # Get the venv python path from setup output
 PY=$(python3 -c "import json; print(json.load(open('$HOME/.openclaw-desktop-agent-ops/setup_state.json'))['env']['DESKTOP_AGENT_OPS_PYTHON'])")
@@ -130,23 +130,23 @@ PY=$(python3 -c "import json; print(json.load(open('$HOME/.openclaw-desktop-agen
 
 ```bash
 # 📸 Take a screenshot
-$PY scripts/desktop_ops.py screenshot --output screen.png
+$PY skill/scripts/desktop_ops.py screenshot --output screen.png
 
 # 🔍 Find text in an app window (OCR-first, window-scoped)
-$PY scripts/target_resolver.py --app "WeChat" --text "Send" --python $PY
+$PY skill/scripts/target_resolver.py --app "WeChat" --text "Send" --python $PY
 # Returns: {best_candidate: {x: 450, y: 520, within_window: true}}
 
 # 🖱️ Click at the found coordinates
-$PY scripts/desktop_ops.py click --x 450 --y 520
+$PY skill/scripts/desktop_ops.py click --x 450 --y 520
 
 # ⌨️ Type text (CJK supported via clipboard-paste)
-$PY scripts/desktop_ops.py type --text "Hello World"
+$PY skill/scripts/desktop_ops.py type --text "Hello World"
 
 # 📜 Scroll within a specific window
-$PY scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
+$PY skill/scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
 
 # 🔑 Keyboard shortcut
-$PY scripts/desktop_ops.py hotkey --keys cmd c
+$PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 ```
 
 ---
@@ -197,48 +197,48 @@ flowchart LR
 
 ```
 desktop-agent-ops/
-├── SKILL.md                    # Agent operating manual
-├── README.md                   # English documentation (this file)
-├── CHANGELOG.md                # Version history
-├── LICENSE                     # MIT License
+├── README.md                          # English documentation (this file)
+├── CHANGELOG.md                       # Version history
+├── LICENSE                            # MIT License
+├── THIRD_PARTY_NOTICES.md             # Dependency licenses
 │
-├── scripts/                    # Python scripts (3171 lines total)
-│   ├── first_run_setup.py      # 🔧 One-command auto-setup
-│   ├── desktop_ops.py          # ⚙️ 17 desktop operations
-│   ├── target_resolver.py      # 🎯 OCR-first hybrid targeting
-│   ├── ocr_text.py             # 🔍 Multi-lang OCR + DPI scaling
-│   ├── permission_bootstrap.py # 🔐 OS permission requests
-│   ├── click_and_verify.py     # ✅ Safe click with verification
-│   ├── window_regions.py       # 📐 Semantic window regions
-│   ├── target_report.py        # 📊 Structured targeting reports
-│   ├── region_diff.py          # 🔄 Before/after image diff
-│   ├── template_match.py       # 🖼️ OpenCV template matching
-│   ├── smoke_test.py           # 🧪 Full readiness test
-│   ├── doctor.py               # 🏥 Dependency health check
-│   ├── task_context.py         # 📝 Per-task state management
-│   ├── cleanup_task.py         # 🧹 Task cleanup
-│   ├── platform_probe.py       # 🔎 OS and display detection
-│   ├── targeting.py            # 📍 Candidate point generation
-│   └── bootstrap_env.py        # 📦 Legacy venv setup
+├── skill/                             # ← Skill package (what agents use)
+│   ├── SKILL.md                       #   Agent operating manual
+│   ├── scripts/                       #   17 Python scripts (3171 lines)
+│   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
+│   │   ├── desktop_ops.py             #   ⚙️ 17 desktop operations
+│   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
+│   │   ├── ocr_text.py                #   🔍 Multi-lang OCR + DPI
+│   │   ├── permission_bootstrap.py    #   🔐 OS permission requests
+│   │   ├── click_and_verify.py        #   ✅ Safe click pipeline
+│   │   ├── window_regions.py          #   📐 Semantic window regions
+│   │   ├── target_report.py           #   📊 Targeting reports
+│   │   ├── region_diff.py             #   🔄 Before/after diff
+│   │   ├── template_match.py          #   🖼️ OpenCV matching
+│   │   ├── smoke_test.py              #   🧪 Readiness test
+│   │   ├── doctor.py                  #   🏥 Health check
+│   │   ├── task_context.py            #   📝 Task state
+│   │   ├── cleanup_task.py            #   🧹 Cleanup
+│   │   ├── platform_probe.py          #   🔎 OS detection
+│   │   ├── targeting.py               #   📍 Candidate points
+│   │   └── bootstrap_env.py           #   📦 Legacy venv setup
+│   └── references/                    #   17 reference documents
+│       ├── workflow.md                #   Core 8-step loop
+│       ├── platform-macos.md          #   macOS guidance
+│       ├── platform-windows.md        #   Windows guidance
+│       ├── platform-linux.md          #   Linux guidance
+│       └── ...                        #   More reference docs
 │
-├── references/                 # Reference documentation
-│   ├── workflow.md             # Core 8-step closed loop
-│   ├── platform-macos.md       # macOS-specific guidance
-│   ├── platform-windows.md     # Windows-specific guidance
-│   ├── platform-linux.md       # Linux-specific guidance
-│   ├── precise-targeting.md    # 5-layer precision targeting
-│   ├── validation-patterns.md  # Two-stage verification
-│   ├── chat-app-macos.md       # Chat app automation
-│   ├── app-wechat-macos.md     # WeChat-specific guide
-│   ├── operation-patterns.md   # Reusable task templates
-│   └── ...                     # More reference docs
+├── docs/                              # Documentation & translations
+│   ├── README_zh.md                   # 中文文档
+│   ├── README_ja.md                   # 日本語ドキュメント
+│   ├── architecture.md                # Architecture diagram
+│   ├── targeting-pipeline.md          # Targeting sequence diagram
+│   └── setup-pipeline.md             # Setup pipeline diagram
 │
-└── docs/                       # Diagrams and translations
-    ├── README_zh.md            # 中文文档
-    ├── README_ja.md            # 日本語ドキュメント
-    ├── architecture.md         # Architecture diagram
-    ├── targeting-pipeline.md   # Targeting sequence diagram
-    └── setup-pipeline.md       # Setup pipeline diagram
+└── tests/                             # Unit tests
+    ├── test_geometry.py
+    └── test_task_paths.py
 ```
 
 ---
