@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.1 (2026-03-24)
+
+### Packaging & Release
+- Added `skill/agents/openai.yaml` so the packaged skill carries standard UI metadata
+- Added a minimal GitHub Actions unit-test workflow to protect future releases
+- Prepared a pure-skill package layout for direct installation from a release ZIP
+
+### Bug Fixes
+- Fixed task directory handling by centralizing `task_id` validation and safe path resolution in `task_paths.py`
+- Fixed `task_context.py` and `cleanup_task.py` to reuse the same safe task path contract
+- Fixed `desktop_ops.py` missing `escape_applescript_string()` and applied escaping to AppleScript interpolation points
+- Fixed test imports so the suite resolves modules from `skill/scripts/`
+
+### Documentation
+- Unified repository-root command examples in `README.md`, `docs/README_zh.md`, and `docs/README_ja.md`
+- Synced `skill/SKILL.md` with the full `references/` set and corrected example command paths
+
 ## v1.0.0 (2026-03-23)
 
 ### Features

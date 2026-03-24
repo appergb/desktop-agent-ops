@@ -15,6 +15,11 @@ except Exception:
     Image = None
 
 
+def escape_applescript_string(value):
+    """Escape backslashes and quotes before embedding text in AppleScript."""
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def jprint(data):
     print(json.dumps(data, ensure_ascii=False))
 
@@ -218,7 +223,8 @@ def cmd_list_apps():
 def cmd_focus_app(name):
     system = platform.system().lower()
     if system == "darwin":
-        script = f'tell application "{name}" to activate'
+        app_name = escape_applescript_string(name)
+        script = f'tell application "{app_name}" to activate'
         result = osascript(script, "focus-app", system)
         if not result["ok"]:
             jerror("focus-app", result["stderr"] or "osascript_failed", system, hint=result.get("hint"))
@@ -263,13 +269,14 @@ def cmd_front_window_bounds(app=None):
             jerror("front-window-bounds", frontmost["stderr"] or "osascript_failed", system, hint=frontmost.get("hint"))
             return
         process_name = app or frontmost["stdout"]
+        escaped_process_name = escape_applescript_string(process_name)
         if app:
-            activate = osascript(f'tell application "{process_name}" to activate', "front-window-bounds", system)
+            activate = osascript(f'tell application "{escaped_process_name}" to activate', "front-window-bounds", system)
             if not activate["ok"]:
                 jerror("front-window-bounds", activate["stderr"] or "osascript_failed", system, hint=activate.get("hint"))
                 return
         script = f'''tell application "System Events"
-  tell process "{process_name}"
+  tell process "{escaped_process_name}"
     set frontmost to true
     set w to front window
     set p to position of w
@@ -449,7 +456,8 @@ def cmd_press(key):
     # AppleScript fallback for macOS (handles cases where cliclick key names don't work)
     if system == "darwin":
         as_key = APPLESCRIPT_KEYS.get(key.lower(), key.lower())
-        script = f'tell application "System Events" to keystroke {as_key}'
+        escaped_key = escape_applescript_string(as_key)
+        script = f'tell application "System Events" to keystroke "{escaped_key}"'
         if as_key in ("return", "tab", "escape", "delete", "space",
                        "up arrow", "down arrow", "left arrow", "right arrow"):
             script = f'tell application "System Events" to key code {_key_to_keycode(as_key)}'

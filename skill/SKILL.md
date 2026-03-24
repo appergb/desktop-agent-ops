@@ -1,6 +1,6 @@
 ---
 name: desktop-agent-ops
-description: Execute cross-platform desktop tasks through a pure OpenClaw skill that guides the main agent to observe the screen, focus apps/windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click/type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
+description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
 ---
 
 # Desktop Agent Ops
@@ -232,30 +232,30 @@ Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `conte
 ### Example 1: Click a button by text in WeChat
 
 ```
-1. $PY first_run_setup.py --check                          → ready: true
-2. $PY task_context.py init --task-id "wechat-send"
-3. $PY desktop_ops.py focus-app --name "WeChat"             → WeChat is frontmost
-4. $PY desktop_ops.py front-window-bounds --app "WeChat"    → {x:100, y:50, w:800, h:600}
-5. $PY target_resolver.py --app "WeChat" --text "发送" --python $PY
+1. $PY scripts/first_run_setup.py --check                  → ready: true
+2. $PY scripts/task_context.py init --task-id "wechat-send"
+3. $PY scripts/desktop_ops.py focus-app --name "WeChat"   → WeChat is frontmost
+4. $PY scripts/desktop_ops.py front-window-bounds --app "WeChat" → {x:100, y:50, w:800, h:600}
+5. $PY scripts/target_resolver.py --app "WeChat" --text "发送" --python $PY
    → best_candidate: {x:450, y:520, within_window:true}
-6. $PY desktop_ops.py move --x 450 --y 520
-7. $PY desktop_ops.py screenshot --output /tmp/v.png --with-cursor
+6. $PY scripts/desktop_ops.py move --x 450 --y 520
+7. $PY scripts/desktop_ops.py screenshot --output /tmp/v.png --with-cursor
    → visually confirm cursor is on "发送" button
-8. $PY desktop_ops.py click --x 450 --y 520
-9. $PY desktop_ops.py screenshot --output /tmp/after.png
+8. $PY scripts/desktop_ops.py click --x 450 --y 520
+9. $PY scripts/desktop_ops.py screenshot --output /tmp/after.png
    → verify the message was sent
-10. $PY cleanup_task.py --task-id "wechat-send"
+10. $PY scripts/cleanup_task.py --task-id "wechat-send"
 ```
 
 ### Example 2: Type in a search box
 
 ```
-1. $PY desktop_ops.py focus-app --name "Safari"
-2. $PY target_resolver.py --app "Safari" --text "搜索" --region-label top_search --python $PY
+1. $PY scripts/desktop_ops.py focus-app --name "Safari"
+2. $PY scripts/target_resolver.py --app "Safari" --text "搜索" --region-label top_search --python $PY
    → finds search box → {x:300, y:80, within_window:true}
-3. $PY desktop_ops.py click --x 300 --y 80
-4. $PY desktop_ops.py type --text "hello world"
-5. $PY desktop_ops.py press --key return
+3. $PY scripts/desktop_ops.py click --x 300 --y 80
+4. $PY scripts/desktop_ops.py type --text "hello world"
+5. $PY scripts/desktop_ops.py press --key return
 ```
 
 ---
@@ -273,8 +273,15 @@ Load as needed:
 | `references/operation-patterns.md` | Reusable task templates |
 | `references/validation-patterns.md` | Two-stage validation |
 | `references/precise-targeting.md` | 5-layer precision targeting |
+| `references/target-providers.md` | Provider ordering and fallback contract |
+| `references/coordinate-reconstruction.md` | Rebuild click coordinates from screenshot evidence |
 | `references/chat-app-macos.md` | Chat app workflow |
 | `references/app-wechat-macos.md` | WeChat-specific guidance |
+| `references/cleanup-rules.md` | Cleanup timing and minimum cleanup scope |
+| `references/collaboration-rules.md` | When multi-agent collaboration is actually justified |
+| `references/example-cases.md` | Public-safe repeatable task examples |
+| `references/eval-scenarios.md` | Evaluation scenarios and pass/fail framing |
+| `references/market-precision-targeting-gap-analysis.md` | Competitive context and differentiation |
 | `references/reproducible-setup.md` | Host bring-up checklist |
 
 ## Scope

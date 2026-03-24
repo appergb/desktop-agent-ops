@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import tempfile
 import time
-from pathlib import Path
 
-BASE = Path(tempfile.gettempdir()) / 'openclaw-desktop-agent'
-BASE.mkdir(parents=True, exist_ok=True)
+from task_paths import resolve_task_dir
 
 
 def path_for(task_id):
-    return BASE / task_id
+    return resolve_task_dir(task_id)
 
 
 def cmd_init(task_id):
     p = path_for(task_id)
     p.mkdir(parents=True, exist_ok=True)
     state = {
-        'task_id': task_id,
+        'task_id': p.name,
         'started_at': int(time.time()),
         'last_action': None,
         'last_capture': None,
