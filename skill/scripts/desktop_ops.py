@@ -532,10 +532,9 @@ def cmd_scroll(amount, x=None, y=None, direction="vertical"):
 
 def cmd_press(key):
     system = platform.system().lower()
-    cc = find_cliclick()
     normalized_key = normalize_press_key(key)
 
-    # Map common key names to cliclick and AppleScript equivalents
+    # Map common key names to AppleScript equivalents
     APPLESCRIPT_KEYS = {
         "return": "return",
         "tab": "tab", "escape": "escape",
@@ -545,26 +544,29 @@ def cmd_press(key):
         "left": "left arrow", "right": "right arrow",
     }
 
-    if cc and system == "darwin":
-        try:
-            run([cc, f"kp:{normalized_key}"])
-            jprint({"ok": True, "action": "press", "backend": "cliclick", "key": normalized_key})
-            return
-        except SystemExit:
-            pass  # cliclick failed, try AppleScript fallback
-
-    # AppleScript fallback for macOS (handles cases where cliclick key names don't work)
+    # macOS: AppleScript key code is primary (most reliable for apps like WeChat)
+    # cliclick kp: generates events that some apps don't recognize
     if system == "darwin":
         as_key = APPLESCRIPT_KEYS.get(normalized_key, normalized_key)
-        escaped_key = escape_applescript_string(as_key)
-        script = f'tell application "System Events" to keystroke "{escaped_key}"'
         if as_key in ("return", "tab", "escape", "delete", "space",
                        "up arrow", "down arrow", "left arrow", "right arrow"):
             script = f'tell application "System Events" to key code {_key_to_keycode(as_key)}'
+        else:
+            escaped_key = escape_applescript_string(as_key)
+            script = f'tell application "System Events" to keystroke "{escaped_key}"'
         result = osascript(script, "press", system)
         if result["ok"]:
             jprint({"ok": True, "action": "press", "backend": "applescript", "key": normalized_key})
             return
+        # Fallback to cliclick
+        cc = find_cliclick()
+        if cc:
+            try:
+                run([cc, f"kp:{normalized_key}"])
+                jprint({"ok": True, "action": "press", "backend": "cliclick", "key": normalized_key})
+                return
+            except SystemExit:
+                pass
 
     pg = pyautogui_mod()
     pg.press(pyautogui_key_name(normalized_key))
