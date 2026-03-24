@@ -386,3 +386,274 @@ Desktop launcher, controller, proxy manager, tunnel manager, or similar utility 
 - if the wrong utility window is active, refocus and revalidate before any click
 - if start-all is not obvious, prefer verified per-item start over guessing a toolbar button
 - if an error dialog appears, capture it and choose the safest recovery path before continuing
+
+---
+
+## Case 12: Right-click context menu operation
+
+### Goal
+Right-click an element to open a context menu and select an option.
+
+### Target app type
+Any desktop app with context menus (file manager, browser, editor, etc.).
+
+### Preconditions
+- target element is visible
+- window bounds are known
+
+### Workflow
+1. focus target app
+2. locate target element via OCR or coordinates
+3. right-click: `desktop_ops.py click --x X --y Y --button right`
+4. wait 0.3s for menu to appear
+5. capture screenshot
+6. OCR the context menu to find the target option
+7. click the menu option (left-click)
+8. capture again and verify the action took effect
+
+### Validation points
+- context menu appeared after right-click
+- correct menu option was identified
+- action result is visible (e.g., file renamed, item deleted, etc.)
+
+### Failure recovery
+- if menu didn't appear, re-right-click
+- if wrong menu appeared, press Escape to dismiss and retry
+- context menu coordinates are absolute — do NOT reuse old coordinates after menu dismiss
+
+---
+
+## Case 13: Drag and drop between locations
+
+### Goal
+Drag a file, UI element, or selection from one position to another.
+
+### Target app type
+File manager, editor, kanban board, or any drag-enabled UI.
+
+### Preconditions
+- source and destination positions are known
+- window bounds are current
+
+### Workflow
+1. focus target app
+2. locate source element (OCR or known position)
+3. locate destination area
+4. execute: `desktop_ops.py drag --x1 SX --y1 SY --x2 DX --y2 DY --duration 0.5`
+5. use longer `--duration` (0.5–1.0s) for apps that need sustained hold to register drag
+6. capture again
+7. verify the element moved to the destination
+
+### Validation points
+- source element is no longer at original position
+- element appears at destination
+- no error dialog appeared
+
+### Failure recovery
+- if drag failed, try longer `--duration`
+- ensure source was correctly identified before retrying
+- some apps require clicking source first, holding briefly, then dragging — add a separate click+hold step
+
+---
+
+## Case 14: Navigate system settings (multi-panel)
+
+### Goal
+Open system settings, navigate to a specific panel, and change a setting.
+
+### Target app type
+System Settings (macOS), Settings (Windows), or similar preferences app.
+
+### Preconditions
+- settings app can be focused
+
+### Workflow
+1. focus settings app: `focus-app --name "System Settings"` (macOS) or `focus-app --name "Settings"` (Windows)
+2. capture and verify the correct settings window
+3. if search is available, use it: click search field → type setting name → select result
+4. if no search, navigate sidebar: OCR sidebar → click target category
+5. after each navigation, capture and verify the panel changed
+6. locate the target control (toggle, dropdown, input field)
+7. interact with the control
+8. capture and verify the change
+
+### Validation points
+- correct settings panel is visible
+- control state changed as expected
+- no unsaved-changes dialog blocks exit
+
+### Failure recovery
+- settings panels can be deep — always re-get window bounds after navigation
+- if lost in navigation, use search or go back to main settings list
+- some settings require admin/password — handle the auth dialog if it appears
+
+---
+
+## Case 15: Fill a multi-field form
+
+### Goal
+Fill out multiple fields in a form (registration, login, data entry).
+
+### Target app type
+Browser form, desktop app form, or dialog with multiple inputs.
+
+### Preconditions
+- form is visible
+- field labels are readable
+
+### Workflow
+1. capture the form area
+2. for each field:
+   a. OCR to find the field label
+   b. click the input area next to/below the label
+   c. verify cursor is in the correct field (capture)
+   d. clear existing content if needed: `hotkey --keys cmd a` then `press --key delete`
+   e. type the value: `type --text "value"`
+   f. capture and verify text is in the right field
+3. after all fields are filled, locate the submit button
+4. click submit
+5. capture and verify form submitted successfully
+
+### Validation points
+- each field contains the correct value
+- no field was accidentally skipped or double-filled
+- submit action triggered the expected result
+
+### Failure recovery
+- if text goes to wrong field, clear it, re-locate the correct field
+- Tab key can navigate between fields: `press --key tab`
+- if form validation fails, capture error messages and correct the fields
+
+---
+
+## Case 16: Select from a dropdown or combo box
+
+### Goal
+Open a dropdown menu and select a specific option.
+
+### Target app type
+Any app with dropdown/select controls.
+
+### Preconditions
+- dropdown control is visible
+
+### Workflow
+1. locate the dropdown control via OCR or region
+2. click to open the dropdown
+3. wait 0.2s for options to appear
+4. capture the dropdown list
+5. OCR to find the target option
+6. click the target option
+7. capture and verify the dropdown now shows the selected value
+
+### Validation points
+- dropdown opened and showed options
+- correct option was selected
+- dropdown closed and displays the new value
+
+### Failure recovery
+- if dropdown didn't open, click again
+- if target option is not visible, scroll within the dropdown: `scroll --amount -3 --x X --y Y`
+- if wrong option selected, re-open and re-select
+
+---
+
+## Case 17: Toggle a switch or adjust a slider
+
+### Goal
+Toggle an on/off switch or drag a slider to a target value.
+
+### Target app type
+Settings panel, preferences dialog, audio/video controls.
+
+### Preconditions
+- control is visible
+
+### Workflow (toggle):
+1. locate the toggle via OCR (look for label text near it)
+2. click the toggle control
+3. capture and verify state changed (color change, position change, label change)
+
+### Workflow (slider):
+1. locate the slider track and current handle position
+2. calculate target position on the track
+3. drag from current handle to target: `drag --x1 HX --y1 HY --x2 TX --y2 HY --duration 0.3`
+4. capture and verify slider moved to expected position
+
+### Validation points
+- toggle: visual state changed (on↔off)
+- slider: handle position changed, associated value updated
+
+### Failure recovery
+- toggles may need double-click on some platforms
+- sliders may need precise coordinates — use capture-region to narrow down
+
+---
+
+## Case 18: Switch between multiple apps (cross-app workflow)
+
+### Goal
+Copy content from one app and paste it into another.
+
+### Target app type
+Any two desktop apps.
+
+### Preconditions
+- both apps are running
+
+### Workflow
+1. focus source app: `focus-app --name "SourceApp"`
+2. get window bounds
+3. locate and select source content (click, or Cmd+A)
+4. copy: `hotkey --keys cmd c`
+5. focus destination app: `focus-app --name "DestApp"`
+6. get window bounds
+7. click target input field
+8. paste: `hotkey --keys cmd v`
+9. capture and verify content was pasted
+
+### Validation points
+- source content was selected before copy
+- destination field received the content
+- content matches expected value
+
+### Failure recovery
+- if paste shows nothing, re-copy from source
+- verify focus is correct before each hotkey
+- clipboard content can be checked via `pbpaste` (macOS) or PowerShell `Get-Clipboard` (Windows)
+
+---
+
+## Case 19: Browser tab management
+
+### Goal
+Open, switch between, or close browser tabs.
+
+### Target app type
+Desktop browser (Chrome, Safari, Firefox, Edge).
+
+### Preconditions
+- browser is focused
+
+### Workflow (open new tab):
+1. `hotkey --keys cmd t` (macOS) or `hotkey --keys ctrl t` (Windows/Linux)
+2. type URL: `type --text "https://example.com"`
+3. `press --key return`
+4. capture and verify page loaded
+
+### Workflow (switch tab):
+1. to go to next tab: `hotkey --keys cmd shift ]` (macOS) or `hotkey --keys ctrl tab`
+2. to go to specific tab: `hotkey --keys cmd 1` (first tab), `cmd 2` (second), etc.
+3. capture and verify correct tab is active
+
+### Workflow (close tab):
+1. `hotkey --keys cmd w` (macOS) or `hotkey --keys ctrl w`
+2. capture and verify tab closed
+
+### Validation points
+- correct tab is active (verify title or URL content via OCR)
+- page content matches expected state
+
+### Failure recovery
+- if wrong tab, use Cmd+Z/Ctrl+Z to reopen closed tab
+- capture tab bar area to count/identify open tabs
