@@ -2,36 +2,47 @@
 
 ## Summary
 
-Bug-fix release addressing 10 issues found during comprehensive code review. Key fix: minimized windows on macOS can now be restored by `focus-app`.
+Major reliability and performance release. Fixes CJK text input, Enter-to-send, minimized window restoration, and 10+ other bugs. End-to-end WeChat message sending now works reliably and is 7.6x faster.
 
-## Bug Fixes
+## Performance (7.6x faster end-to-end)
 
-### Critical
-- **Minimized window restoration** — `focus-app` now clicks the Dock icon to restore minimized windows on macOS. Previously only handled hidden (`Cmd+H`) apps, not minimized (`Cmd+M`) windows. Dock-click approach is reliable across native and non-native apps (e.g., WeChat).
-- **Missing `find_running_app` function** — added case-insensitive exact-match lookup; 2 previously failing tests now pass.
+- `type`: clipboard paste is now the primary path on ALL platforms (was cliclick on macOS, which silently dropped CJK)
+- `paste_text` macOS: single osascript call (`set clipboard` + `Cmd+V`), no separate `pbcopy` subprocess
+- `paste_text` Windows: PowerShell `Set-Clipboard` for faster Unicode handling
+- `focus-app`: fast path skips Dock traversal when app is already frontmost
+- `focus-app`: reduced delays from 0.3s to 0.15s
+- **Benchmark** (macOS, WeChat): focus 0.29s + type 0.17s + send 0.13s = **0.59s total** (was 4.49s)
 
-### High
-- **`cmd_scroll` horizontal double-execution** — removed duplicate `hscroll()` call that ran once in a try/except and again unconditionally.
-- **`cmd_screenshot` fd leak** — `os.close(fd)` now called after `mkstemp` before unlinking.
-- **`cmd_pixel_color` unsafe tempfile** — replaced deprecated `mktemp` with safe `mkstemp`.
-- **`cmd_front_window_bounds` crash on `|` in title** — switched from `split('|')` to `rsplit('|', 2)` with validation.
-- **`cmd_insert_newline` silent failure** — now catches `SystemExit` and outputs JSON error via `jerror`.
+## Critical Fixes
 
-### Medium
-- **`cmd_drag` cliclick ignoring duration** — now inserts `w:<ms>` wait between mouse-down and mouse-up for reliable drag recognition.
-- **`cmd_type` CJK silent skip** — final pyautogui fallback now errors with hint instead of silently dropping non-ASCII characters.
-- **Late `import time`** — moved to module-level import.
+- **CJK text input** — cliclick `t:` silently dropped Chinese/Japanese/Korean characters; now clipboard paste is always used first
+- **Enter-to-send** — cliclick `kp:return` was not recognized by WeChat; now AppleScript `key code 36` is the primary path on macOS
+- **Hotkey with letters** — `hotkey --keys cmd a` failed because cliclick `kp:` doesn't support letter keys; now uses `t:` for characters
+- **Minimized window restoration** — `focus-app` now clicks Dock icon to restore minimized windows (previously only handled hidden apps)
+
+## Other Bug Fixes
+
+- `cmd_scroll` horizontal direction removed duplicate execution
+- `cmd_screenshot` file descriptor leak from `mkstemp` (fd never closed)
+- `cmd_pixel_color` replaced deprecated `tempfile.mktemp` with safe `mkstemp`
+- `cmd_front_window_bounds` crash when window title contains `|` character
+- `cmd_insert_newline` now catches `SystemExit` and outputs JSON error via `jerror`
+- `cmd_drag` cliclick path now respects `--duration` parameter (inserts `w:` wait)
+- Added missing `find_running_app` function (2 tests were failing)
+- `import time` moved to module top level
+
+## Documentation Updates
+
+- README.md: updated platform table with new backend priorities
+- SKILL.md: added backend priority table, updated text input docs
+- platform-macos.md: documented clipboard-first input, AppleScript key press, focus-app fast path
+- platform-windows.md: documented PowerShell clipboard, pyautogui input
+- CHANGELOG.md: complete v1.0.2 history
 
 ## Test Results
 
 13/13 tests passing.
 
-## Files Changed
+## End-to-End Verified
 
-- `skill/scripts/desktop_ops.py` — all fixes
-- `CHANGELOG.md` — version history updated
-
-## Package
-
-- `desktop-agent-ops-v1.0.2.zip` (74 KB)
-- SHA256: `8fbcfa36c713dc123cea50edaa3f6299ed9fc3dfd929a548d1f6f1dbbc4821de`
+WeChat macOS: `focus-app` → `type --text "中文消息"` → `press --key return` → message sent successfully.

@@ -192,8 +192,11 @@ The pipeline works for any desktop application. Here is how to reason about new 
 ```bash
 $PY scripts/desktop_ops.py type --text "your message"
 ```
-- Works for all languages including CJK (uses clipboard-paste fallback)
-- First click on the input field to focus it
+- Uses **clipboard paste** as primary method on all platforms — reliable for all languages including CJK
+- macOS: `set the clipboard to` + `Cmd+V` (single osascript call)
+- Windows: PowerShell `Set-Clipboard` + `Ctrl+V` (falls back to `clip.exe`)
+- Linux: `xclip` + `Ctrl+V`
+- First click on the input field to focus it before typing
 
 ### Multi-line messages
 ```bash
@@ -205,9 +208,20 @@ $PY scripts/desktop_ops.py type --text "second line"
 - Do NOT use `\n` in `type --text` — it may trigger send in some apps
 
 ### Sending a message
-1. **Preferred**: Look for a visible send button via OCR, then click it
+1. **Preferred**: Look for a visible send button (e.g., `发送`) via OCR, then click it
 2. **Alternative**: Use `press --key return` ONLY when the app is verified to use Enter-to-send
 3. **Never guess** which send method to use — verify first
+
+### Backend priority (macOS)
+| Operation | Primary | Fallback |
+|-----------|---------|----------|
+| `type` | Clipboard paste | cliclick (ASCII only) |
+| `press` | AppleScript `key code` | cliclick `kp:` |
+| `hotkey` | cliclick `kd:/t:/ku:` | pyautogui |
+| `click` | cliclick | pyautogui |
+
+> **Important**: cliclick `kp:return` is NOT recognized by WeChat — always use AppleScript for key press.
+> **Important**: cliclick `t:` silently drops CJK characters — always use clipboard paste for text input.
 
 ---
 

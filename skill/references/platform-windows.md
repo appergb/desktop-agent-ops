@@ -6,9 +6,11 @@ This file defines the intended Windows branch for the skill.
 
 For Windows, prefer a helper-script path that wraps:
 
-- `pygetwindow` (Win32 window enumeration/activation)
+- `pygetwindow` (Win32 window enumeration/activation, restore minimized windows)
 - screenshot tooling such as Pillow/MSS
-- pyautogui-like input control where appropriate
+- pyautogui for mouse and keyboard input
+- text input: clipboard paste via PowerShell `Set-Clipboard` + `Ctrl+V` (handles all languages including CJK; falls back to `clip.exe` if PowerShell unavailable)
+- key press / hotkey: `pyautogui.press()` / `pyautogui.hotkey()`
 
 ## MVP rule
 

@@ -185,14 +185,15 @@ flowchart LR
 | Feature | macOS | Windows | Linux (X11) |
 |---------|-------|---------|-------------|
 | Screenshot | screencapture | pyautogui | pyautogui/scrot |
-| Mouse/Keyboard | cliclick → pyautogui | pyautogui | pyautogui |
+| Mouse | cliclick → pyautogui | pyautogui | pyautogui |
 | Window focus | AppleScript | pygetwindow | wmctrl |
 | Window bounds | AppleScript | pygetwindow | xdotool |
 | App list | AppleScript | pygetwindow | wmctrl |
 | OCR | pytesseract | pytesseract | pytesseract |
-| CJK input | AppleScript paste | clip.exe + Ctrl+V | xclip + Ctrl+V |
+| Text input | Clipboard paste (all text) | Clipboard paste (PowerShell/clip) | Clipboard paste (xclip) |
+| Key press | AppleScript key code → cliclick | pyautogui | pyautogui |
+| Hotkey | cliclick (modifier+key) → pyautogui | pyautogui | pyautogui |
 | DPI detection | Auto (2x Retina) | Auto (1.25x-2x) | Auto (1x-2x) |
-| Key fallback | AppleScript key code | pyautogui | pyautogui |
 
 ---
 
@@ -254,7 +255,7 @@ desktop-agent-ops/
 All commands below assume you are running from the repository root.
 
 <details>
-<summary><b>desktop_ops.py — 17 Desktop Operations</b></summary>
+<summary><b>desktop_ops.py — 18 Desktop Operations</b></summary>
 
 ```bash
 # Screenshot

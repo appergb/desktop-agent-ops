@@ -13,6 +13,8 @@
 ### Bug Fixes
 - Fixed minimized window restoration on macOS — `focus-app` now clicks dock icon to restore minimized windows (previously only handled hidden apps)
 - Fixed `cmd_type` dropping CJK text — cliclick was first choice but silently skips non-ASCII; now clipboard paste is always first
+- Fixed `cmd_press` on macOS — AppleScript `key code` is now the primary path; cliclick `kp:return` was not recognized by WeChat
+- Fixed `cmd_hotkey` on macOS — cliclick `kp:` only accepts special keys; letter keys (a, c, v) now use `t:` so `cmd+a`, `cmd+c` etc. work correctly
 - Fixed `cmd_scroll` horizontal direction executing twice (once in try/except, once unconditionally)
 - Fixed `cmd_screenshot` file descriptor leak from `mkstemp` (fd was never closed)
 - Fixed `cmd_pixel_color` using deprecated `tempfile.mktemp` (replaced with safe `mkstemp`)

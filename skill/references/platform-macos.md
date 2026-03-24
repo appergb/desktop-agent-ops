@@ -5,9 +5,12 @@
 For macOS, prefer these primitives:
 
 - screenshot: `/usr/sbin/screencapture`
-- app activation: `osascript`
-- mouse/keyboard: prefer `cliclick` for macOS-native pointer/key events; use `pyautogui` as fallback
-- optional future expansion: Accessibility API / Quartz
+- app activation: `osascript` (AppleScript)
+- mouse: `cliclick` (preferred) → `pyautogui` (fallback)
+- text input: clipboard paste via `set the clipboard to` + `Cmd+V` (handles all languages including CJK)
+- key press: AppleScript `key code` (preferred, most reliable for apps like WeChat) → `cliclick kp:` (fallback)
+- hotkey: `cliclick kd:/t:/ku:` (modifier keys + character) → `pyautogui.hotkey` (fallback)
+- focus-app: fast path if already frontmost; Dock click to restore minimized windows; `activate` + `AXRaise`
 
 Use them through `scripts/desktop_ops.py`, not ad hoc each time.
 
@@ -50,10 +53,13 @@ On macOS, app activation, focus transfer, and message-send UI updates may lag sl
 
 When working with chat apps such as WeChat:
 - after `focus-app`, prefer a short settle wait before capturing if the window was previously occluded
-- for WeChat and similar instant-messaging apps in this skill, first check for a verified visible send control; if none exists, use `desktop_ops.py press --key return` only when direct-Enter-to-send is verified for that host
+- `type --text` always uses clipboard paste (reliable for CJK); cliclick `t:` silently drops non-ASCII characters
+- `press --key return` uses AppleScript `key code 36` (not cliclick) — cliclick's `kp:return` is not recognized by WeChat and some other apps
+- for WeChat and similar instant-messaging apps, first check for a verified visible send control; if none exists, use `desktop_ops.py press --key return` only when direct-Enter-to-send is verified for that host
 - when a multi-line message is needed, use `desktop_ops.py insert-newline` for the line break and keep `press --key return` for the actual send event
-- after a send trigger, wait a short moment before verification capture
+- after a send trigger, wait a short moment (0.3–0.5s) before verification capture
 - if the first verification capture is ambiguous, recapture once more at about 1 second total elapsed before treating it as a failure
+- `focus-app` skips Dock traversal if app is already frontmost (fast path ~0.3s vs full ~1s)
 
 
 ### Bring an app forward
