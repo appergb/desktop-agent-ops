@@ -130,16 +130,19 @@ Desktop chat app.
 ### Preconditions
 - correct conversation already verified
 - typed text is visible in the true composer
-- send behavior is known for the host app
+- at least one send path is verified: visible send button or verified send key behavior
 
 ### Workflow
 1. type neutral safe text
-2. verify text is visible in the composer
-3. trigger the app’s real send action
-4. wait briefly for UI commit
-5. capture again
-6. if needed, capture once more after about 1 second total
-7. confirm the outgoing message bubble appears
+2. if a literal line break is needed, use `desktop_ops.py insert-newline`
+3. verify text is visible in the composer
+4. check whether a verified visible send control exists
+5. if it exists, use that explicit send control
+6. otherwise, if direct-Enter-to-send is verified, run `desktop_ops.py press --key return`
+7. wait briefly for UI commit
+8. capture again
+9. if needed, capture once more after about 1 second total
+10. confirm the outgoing message bubble appears
 
 ### Validation points
 - typed text existed before send
@@ -149,7 +152,9 @@ Desktop chat app.
 ### Failure recovery
 - do not assume success from keypress return values alone
 - recapture and verify active conversation again
-- confirm send backend and retry only if the target remains verified
+- confirm the visible send control or verified send key path before retrying
+
+If the message body needs multiple lines, insert the line break with `desktop_ops.py insert-newline` before the final send action.
 
 ---
 

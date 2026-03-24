@@ -31,7 +31,7 @@ It provides a complete pipeline from **screen observation** to **precise clickin
 | 🌐 **Multi-Language OCR** | Auto-detects system language and installs matching Tesseract packs |
 | ⌨️ **CJK Text Input** | Reliable Chinese/Japanese/Korean input via clipboard-paste fallback |
 | 🔧 **One-Command Setup** | `first_run_setup.py` auto-installs everything on first use |
-| 🖱️ **17 Operations** | Screenshot, click, type, scroll, drag, hotkey, focus-app, and more |
+| 🖱️ **18 Operations** | Screenshot, click, type, insert-newline, scroll, drag, hotkey, focus-app, and more |
 
 ---
 
@@ -51,7 +51,7 @@ graph TB
         F[template_match.py]
     end
     subgraph "⚙️ Action Layer"
-        H[desktop_ops.py<br/>17 Operations]
+        H[desktop_ops.py<br/>18 Operations]
     end
     subgraph "💻 Platform"
         I[macOS]
@@ -142,6 +142,9 @@ $PY skill/scripts/desktop_ops.py click --x 450 --y 520
 # ⌨️ Type text (CJK supported via clipboard-paste)
 $PY skill/scripts/desktop_ops.py type --text "Hello World"
 
+# ↩️ Insert a literal newline without sending
+$PY skill/scripts/desktop_ops.py insert-newline
+
 # 📜 Scroll within a specific window
 $PY skill/scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
 
@@ -208,7 +211,7 @@ desktop-agent-ops/
 │   │   └── openai.yaml                #   Display name, prompt, policy
 │   ├── scripts/                       #   18 Python scripts
 │   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
-│   │   ├── desktop_ops.py             #   ⚙️ 17 desktop operations
+│   │   ├── desktop_ops.py             #   ⚙️ 18 desktop operations
 │   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
 │   │   ├── ocr_text.py                #   🔍 Multi-lang OCR + DPI
 │   │   ├── permission_bootstrap.py    #   🔐 OS permission requests
@@ -275,6 +278,7 @@ $PY skill/scripts/desktop_ops.py mouse-position
 # Keyboard
 $PY skill/scripts/desktop_ops.py press --key KEY
 $PY skill/scripts/desktop_ops.py type --text "text to type"
+$PY skill/scripts/desktop_ops.py insert-newline [--count N]
 $PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 
 # Screen Info

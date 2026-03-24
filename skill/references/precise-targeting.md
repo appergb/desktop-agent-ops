@@ -97,7 +97,8 @@ For WeChat-like apps:
 - first confirm the chat page is already open
 - treat the bottom composer as a dedicated target region
 - avoid the attachment/tool row above the input area
-- if the app is configured for Enter-to-send, pressing Enter is valid only after text is visibly in the actual text input field
+- first check for a verified visible send control
+- if no verified visible send control exists, use a verified send key path only after text is visibly in the actual text input field
 
 ## Recommended reusable flow
 

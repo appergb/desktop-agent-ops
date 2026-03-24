@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 try:
@@ -18,6 +20,32 @@ except Exception:
 def escape_applescript_string(value):
     """Escape backslashes and quotes before embedding text in AppleScript."""
     return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def normalize_press_key(key):
+    """Normalize user-facing key names so Enter-like actions map to real key presses."""
+    normalized = str(key).strip().lower()
+    aliases = {
+        'enter': 'return',
+        'return': 'return',
+        'esc': 'escape',
+        'backspace': 'delete',
+    }
+    return aliases.get(normalized, normalized)
+
+
+def pyautogui_key_name(key):
+    """Translate normalized key names to the names expected by pyautogui."""
+    mapping = {
+        'return': 'enter',
+        'escape': 'esc',
+        'delete': 'backspace',
+        'up arrow': 'up',
+        'down arrow': 'down',
+        'left arrow': 'left',
+        'right arrow': 'right',
+    }
+    return mapping.get(key, key)
 
 
 def jprint(data):
@@ -82,6 +110,15 @@ def pygetwindow_mod():
         return None
 
 
+def find_running_app(query, candidates):
+    """Case-insensitive exact match of query against candidate process names."""
+    q = query.lower()
+    for name in candidates:
+        if name.lower() == q:
+            return name
+    return None
+
+
 def find_cliclick():
     return shutil.which('cliclick')
 
@@ -102,6 +139,7 @@ def cmd_screenshot(output=None, x=None, y=None, width=None, height=None, with_cu
     system = platform.system().lower()
     if output is None:
         fd, path = tempfile.mkstemp(prefix="desktop-agent-", suffix=".png")
+        os.close(fd)
         Path(path).unlink(missing_ok=True)
         output = path
     region = None if None in (x, y, width, height) else {"x": x, "y": y, "width": width, "height": height}
@@ -224,12 +262,72 @@ def cmd_focus_app(name):
     system = platform.system().lower()
     if system == "darwin":
         app_name = escape_applescript_string(name)
-        script = f'tell application "{app_name}" to activate'
+        # Multi-step activation to handle background/minimized/hidden apps:
+        # 1. Make app visible (unhide if hidden)
+        # 2. Activate the app (bring to front)
+        # 3. Set frontmost via System Events (force focus)
+        # 4. Raise the first window if it exists
+        script = f'''
+tell application "System Events"
+    set appExists to (exists process "{app_name}")
+end tell
+
+if appExists then
+    -- Step 1: Unhide the app if hidden
+    tell application "System Events"
+        set visible of process "{app_name}" to true
+    end tell
+    -- Step 2: Restore minimized windows by clicking dock icon
+    -- (Using dock click is more reliable than miniaturized property
+    --  which can hang on non-native apps like WeChat)
+    try
+        tell application "System Events"
+            tell process "Dock"
+                set dockItems to every UI element of list 1
+                repeat with dockItem in dockItems
+                    try
+                        if name of dockItem is "{app_name}" then
+                            -- Click dock icon to restore minimized window
+                            click dockItem
+                            delay 0.3
+                            exit repeat
+                        end if
+                    end try
+                end repeat
+            end tell
+        end tell
+    end try
+    -- Step 3: Activate the app (bring to front)
+    tell application "{app_name}" to activate
+    delay 0.3
+    -- Step 4: Force focus and raise window
+    tell application "System Events"
+        tell process "{app_name}"
+            set frontmost to true
+            try
+                perform action "AXRaise" of window 1
+            end try
+        end tell
+    end tell
+else
+    -- App not running, try to launch it
+    tell application "{app_name}" to activate
+end if
+'''
         result = osascript(script, "focus-app", system)
         if not result["ok"]:
-            jerror("focus-app", result["stderr"] or "osascript_failed", system, hint=result.get("hint"))
-            return
-        jprint({"ok": True, "action": "focus-app", "app": name})
+            # Fallback: simple activate
+            fallback = osascript(f'tell application "{app_name}" to activate', "focus-app", system)
+            if not fallback["ok"]:
+                jerror("focus-app", fallback["stderr"] or "osascript_failed", system, hint=fallback.get("hint"))
+                return
+
+        # Verify the app actually came to front
+        time.sleep(0.3)
+        verify = osascript('tell application "System Events" to get name of first application process whose frontmost is true', "focus-app", system)
+        is_front = verify.get("ok") and name.lower() in verify.get("stdout", "").lower()
+
+        jprint({"ok": True, "action": "focus-app", "app": name, "verified_frontmost": is_front})
         return
     if system == "windows":
         gw = pygetwindow_mod()
@@ -240,8 +338,12 @@ def cmd_focus_app(name):
         if not wins:
             jerror("focus-app", "window_not_found", system)
             return
+        win = wins[0]
         try:
-            wins[0].activate()
+            # Restore if minimized, then activate
+            if win.isMinimized:
+                win.restore()
+            win.activate()
         except Exception:
             pass
         jprint({"ok": True, "action": "focus-app", "app": name})
@@ -289,7 +391,11 @@ end tell'''
             jerror("front-window-bounds", bounds["stderr"] or "osascript_failed", system, hint=bounds.get("hint"))
             return
         raw = bounds["stdout"]
-        window_name, pos, size = raw.split('|')
+        parts = raw.rsplit('|', 2)
+        if len(parts) != 3:
+            jerror("front-window-bounds", "unexpected_bounds_format", system, details={"raw": raw})
+            return
+        window_name, pos, size = parts
         x, y = [int(v.strip()) for v in pos.split(',')]
         width, height = [int(v.strip()) for v in size.split(',')]
         jprint({"ok": True, "action": "front-window-bounds", "app": process_name, "window": window_name, "x": x, "y": y, "width": width, "height": height})
@@ -384,7 +490,10 @@ def cmd_drag(x1, y1, x2, y2, duration=0.2, button="left"):
     if cc and platform.system().lower() == "darwin":
         if button != "left":
             raise SystemExit("cliclick drag currently supports left button only")
-        run([cc, f"dd:{x1},{y1}", f"dm:{x2},{y2}", f"du:{x2},{y2}"])
+        # cliclick doesn't support duration natively; insert wait between
+        # mouse-down-move and mouse-up to allow UI to register the drag
+        wait_ms = max(int(duration * 1000), 50)
+        run([cc, f"dd:{x1},{y1}", f"w:{wait_ms}", f"dm:{x2},{y2}", f"du:{x2},{y2}"])
         jprint({"ok": True, "action": "drag", "backend": "cliclick", "from": [x1, y1], "to": [x2, y2], "button": button, "duration": duration})
         return
     pg = pyautogui_mod()
@@ -406,18 +515,6 @@ def cmd_scroll(amount, x=None, y=None, direction="vertical"):
             pg.moveTo(x, y, duration=0)
 
     if direction == "horizontal":
-        # Horizontal scroll (pyautogui only, or AppleScript on macOS)
-        if system == "darwin":
-            # AppleScript-based horizontal scroll via cliclick isn't available;
-            # use pyautogui which maps to CGEvent horizontal scroll
-            try:
-                pg = pyautogui_mod()
-                pg.hscroll(amount)
-                jprint({"ok": True, "action": "scroll", "backend": "pyautogui", "direction": "horizontal",
-                         "amount": amount, "x": x, "y": y})
-                return
-            except Exception:
-                pass
         pg = pyautogui_mod()
         pg.hscroll(amount)
         jprint({"ok": True, "action": "scroll", "backend": "pyautogui", "direction": "horizontal",
@@ -434,10 +531,11 @@ def cmd_scroll(amount, x=None, y=None, direction="vertical"):
 def cmd_press(key):
     system = platform.system().lower()
     cc = find_cliclick()
+    normalized_key = normalize_press_key(key)
 
     # Map common key names to cliclick and AppleScript equivalents
     APPLESCRIPT_KEYS = {
-        "return": "return", "enter": "return",
+        "return": "return",
         "tab": "tab", "escape": "escape",
         "delete": "delete", "backspace": "delete",
         "space": "space",
@@ -447,15 +545,15 @@ def cmd_press(key):
 
     if cc and system == "darwin":
         try:
-            run([cc, f"kp:{key}"])
-            jprint({"ok": True, "action": "press", "backend": "cliclick", "key": key})
+            run([cc, f"kp:{normalized_key}"])
+            jprint({"ok": True, "action": "press", "backend": "cliclick", "key": normalized_key})
             return
         except SystemExit:
             pass  # cliclick failed, try AppleScript fallback
 
     # AppleScript fallback for macOS (handles cases where cliclick key names don't work)
     if system == "darwin":
-        as_key = APPLESCRIPT_KEYS.get(key.lower(), key.lower())
+        as_key = APPLESCRIPT_KEYS.get(normalized_key, normalized_key)
         escaped_key = escape_applescript_string(as_key)
         script = f'tell application "System Events" to keystroke "{escaped_key}"'
         if as_key in ("return", "tab", "escape", "delete", "space",
@@ -463,12 +561,12 @@ def cmd_press(key):
             script = f'tell application "System Events" to key code {_key_to_keycode(as_key)}'
         result = osascript(script, "press", system)
         if result["ok"]:
-            jprint({"ok": True, "action": "press", "backend": "applescript", "key": key})
+            jprint({"ok": True, "action": "press", "backend": "applescript", "key": normalized_key})
             return
 
     pg = pyautogui_mod()
-    pg.press(key)
-    jprint({"ok": True, "action": "press", "backend": "pyautogui", "key": key})
+    pg.press(pyautogui_key_name(normalized_key))
+    jprint({"ok": True, "action": "press", "backend": "pyautogui", "key": normalized_key})
 
 
 def _key_to_keycode(key_name):
@@ -479,6 +577,32 @@ def _key_to_keycode(key_name):
         "left arrow": 123, "right arrow": 124,
     }
     return codes.get(key_name, 36)
+
+
+def paste_text(text, action_name='type'):
+    """Paste literal text so apps receive inserted content instead of a synthetic key action."""
+    system = platform.system().lower()
+
+    if system == 'darwin':
+        subprocess.run(['pbcopy'], input=text.encode('utf-8'), check=True)
+        result = osascript('tell application "System Events" to keystroke "v" using command down', action_name, system)
+        if result['ok']:
+            return 'applescript_paste'
+        raise SystemExit(result['stderr'] or 'paste_failed')
+
+    if system == 'windows':
+        subprocess.run(['clip'], input=text.encode('utf-16le'), check=True)
+        pg = pyautogui_mod()
+        pg.hotkey('ctrl', 'v')
+        return 'clip_paste'
+
+    if system == 'linux' and shutil.which('xclip'):
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode('utf-8'), check=True)
+        pg = pyautogui_mod()
+        pg.hotkey('ctrl', 'v')
+        return 'xclip_paste'
+
+    raise SystemExit('literal_paste_unavailable')
 
 
 def cmd_type(text):
@@ -495,22 +619,18 @@ def cmd_type(text):
 
     # AppleScript fallback — handles Unicode/CJK text that cliclick may not support
     if system == "darwin":
-        # Use clipboard-based approach for reliable CJK input
-        import subprocess as _sp
-        _sp.run(["pbcopy"], input=text.encode("utf-8"), check=True)
-        script = 'tell application "System Events" to keystroke "v" using command down'
-        result = osascript(script, "type", system)
-        if result["ok"]:
-            jprint({"ok": True, "action": "type", "backend": "applescript_paste", "text_length": len(text)})
+        try:
+            backend = paste_text(text, action_name='type')
+            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
             return
+        except Exception:
+            pass
 
     # Windows clipboard-paste fallback for CJK/Unicode text
     if system == "windows":
         try:
-            subprocess.run(["clip"], input=text.encode("utf-16le"), check=True)
-            pg = pyautogui_mod()
-            pg.hotkey("ctrl", "v")
-            jprint({"ok": True, "action": "type", "backend": "clip_paste", "text_length": len(text)})
+            backend = paste_text(text, action_name='type')
+            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
             return
         except Exception:
             pass
@@ -518,21 +638,33 @@ def cmd_type(text):
     # Linux clipboard-paste fallback for CJK/Unicode text
     if system == "linux" and shutil.which("xclip"):
         try:
-            subprocess.run(
-                ["xclip", "-selection", "clipboard"],
-                input=text.encode("utf-8"), check=True,
-            )
-            pg = pyautogui_mod()
-            pg.hotkey("ctrl", "v")
-            jprint({"ok": True, "action": "type", "backend": "xclip_paste", "text_length": len(text)})
+            backend = paste_text(text, action_name='type')
+            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
             return
         except Exception:
             pass
 
-    # Final fallback: pyautogui.write (works for ASCII text)
+    # Final fallback: pyautogui.write (ASCII only — CJK/Unicode will be silently skipped)
+    if any(ord(c) > 127 for c in text):
+        jerror("type", "non_ascii_text_requires_clipboard_paste", platform.system().lower(),
+               hint="install_xclip_on_linux_or_check_permissions")
+        return
     pg = pyautogui_mod()
     pg.write(text, interval=0.0)
     jprint({"ok": True, "action": "type", "backend": "pyautogui", "text_length": len(text)})
+
+
+def cmd_insert_newline(count=1):
+    system = platform.system().lower()
+    if count < 1:
+        jerror('insert-newline', 'count_must_be_positive', system)
+        return
+    try:
+        backend = paste_text('\n' * count, action_name='insert-newline')
+    except SystemExit as e:
+        jerror('insert-newline', str(e), system)
+        return
+    jprint({"ok": True, "action": "insert-newline", "backend": backend, "count": count})
 
 
 def cmd_hotkey(keys):
@@ -583,7 +715,8 @@ def cmd_screen_size():
 def cmd_pixel_color(x, y):
     if Image is None:
         raise SystemExit("PIL unavailable: cannot read pixel-color")
-    tmp = tempfile.mktemp(prefix='desktop-pixel-', suffix='.png')
+    fd, tmp = tempfile.mkstemp(prefix='desktop-pixel-', suffix='.png')
+    os.close(fd)
     cmd_screenshot(tmp, x, y, 1, 1)
     img = Image.open(tmp)
     pixel = img.getpixel((0, 0))
@@ -663,6 +796,9 @@ def build_parser():
     t = sub.add_parser("type")
     t.add_argument("--text", required=True)
 
+    nl = sub.add_parser("insert-newline")
+    nl.add_argument("--count", type=int, default=1)
+
     hk = sub.add_parser("hotkey")
     hk.add_argument("--keys", nargs='+', required=True)
 
@@ -703,6 +839,8 @@ def main():
         cmd_press(args.key)
     elif args.cmd == "type":
         cmd_type(args.text)
+    elif args.cmd == "insert-newline":
+        cmd_insert_newline(args.count)
     elif args.cmd == "hotkey":
         cmd_hotkey(args.keys)
     elif args.cmd == "mouse-position":

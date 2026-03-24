@@ -54,13 +54,16 @@ Each scenario should define:
 - verify text appears in input box
 
 ### Scenario D: Send a safe test message
-- precondition: app is configured for Enter-to-send
+- precondition: a send path is verified for the app under test
 - message text must be generic and non-sensitive
 - verify text appears in input box first
-- press Enter
+- if a verified visible send control exists, use it
+- otherwise, if direct-Enter-to-send is verified, run `desktop_ops.py press --key return`
 - wait a short fraction of a second for UI commit
 - verify message bubble appears in transcript
 - if the first capture is inconclusive, wait until about 1 second total and capture again
+
+If the scenario needs a multi-line draft before sending, insert the line break with `desktop_ops.py insert-newline` instead of using a send key.
 
 ## Learning scenes to embed
 

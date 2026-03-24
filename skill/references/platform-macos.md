@@ -50,6 +50,8 @@ On macOS, app activation, focus transfer, and message-send UI updates may lag sl
 
 When working with chat apps such as WeChat:
 - after `focus-app`, prefer a short settle wait before capturing if the window was previously occluded
+- for WeChat and similar instant-messaging apps in this skill, first check for a verified visible send control; if none exists, use `desktop_ops.py press --key return` only when direct-Enter-to-send is verified for that host
+- when a multi-line message is needed, use `desktop_ops.py insert-newline` for the line break and keep `press --key return` for the actual send event
 - after a send trigger, wait a short moment before verification capture
 - if the first verification capture is ambiguous, recapture once more at about 1 second total elapsed before treating it as a failure
 

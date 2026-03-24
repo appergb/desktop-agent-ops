@@ -6,6 +6,13 @@ Use this reference for desktop chat software on macOS, including but not limited
 
 Provide a reusable workflow for reading context, selecting the right conversation, composing text, sending, and verifying the result without relying on private APIs.
 
+For chat apps, sending should follow a decision ladder instead of a guessed shortcut:
+
+1. first check for the app's explicit visible send affordance
+2. if that affordance is visible and verified, use it
+3. if no explicit send affordance is available, use the verified send key path for that host and app
+4. if neither send path is verified, do not send yet
+
 ## Standard chat workflow
 
 1. focus target app
@@ -23,7 +30,7 @@ Provide a reusable workflow for reading context, selecting the right conversatio
 8. draft a reply compatible with that context
 9. click true composer region
 10. verify typed text appears in the composer
-11. trigger send action
+11. choose the verified send action: explicit send button first, otherwise verified `desktop_ops.py press --key return`
 12. wait briefly for UI commit
 13. verify sent result
 
@@ -37,6 +44,12 @@ Before sending a message, confirm all of these:
 - the input text is visible in the true text composer
 
 If any one of these is not confirmed, do not send. If title cannot be confirmed (no OCR/title read), recapture sidebar + header and request user confirmation.
+
+For the typical chat apps covered by this reference, prefer a verified visible send button when it exists. If no verified send button exists, use `desktop_ops.py press --key return` only when direct-Enter-to-send is verified for that host and app.
+
+Do not try to send by appending a newline inside `type --text`. That path behaves like text insertion and may create a new line instead of sending.
+
+When a message really needs a line break, use `desktop_ops.py insert-newline` so the app receives inserted text instead of a send key event.
 
 ## Region guidance
 
@@ -55,6 +68,8 @@ Typing is valid only when the text is visible in the true text input area.
 
 For chat apps, a send key event alone is not sufficient proof.
 Always verify via a post-send capture.
+
+For the apps covered here, do not hardcode a single send trigger. Check for a verified send button first, then fall back to a verified send key path.
 
 Recommended timing:
 - first verification capture after ~0.3-0.8 seconds

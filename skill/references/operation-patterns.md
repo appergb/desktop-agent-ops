@@ -34,11 +34,16 @@ Before clicking a candidate row, keep the target app frontmost and use move -> m
 4. generate 3-5 candidate points inside the input region and avoid the attachment/tool row above the text box
 5. click one candidate, then recapture to verify the real text cursor landed in the text field
 6. type message text
-7. capture and verify the text is visible in the actual input field
-8. use the app’s real send trigger
-9. capture again and verify the message appears sent
+7. if a real line break is needed, run `desktop_ops.py insert-newline`
+8. capture and verify the text is visible in the actual input field
+9. check whether a verified visible send control exists
+10. if it exists, use that explicit send control
+11. otherwise, if direct-Enter-to-send is verified for the host and app, run `desktop_ops.py press --key return`
+12. capture again and verify the message appears sent
 
-For WeChat on this host, the user has confirmed the setting is Enter-to-send, so plain Enter should be treated as the expected send trigger after text is visibly inside the true input box.
+For WeChat and similar chat apps, the preferred order is explicit visible send control first, verified send key second.
+
+If the intended payload needs multiple lines, use `desktop_ops.py insert-newline` for the line break and reserve the final send action for the verified send step.
 
 For instant-messaging apps like WeChat, do not re-capture immediately after pressing Enter. The UI may need a short fraction of a second to commit the outgoing message bubble. Standard rule: wait briefly after send (for example ~0.3-0.8s), then capture; if still ambiguous, wait until about 1 second total and capture again before declaring failure.
 

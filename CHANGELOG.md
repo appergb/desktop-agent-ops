@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.0.2 (2026-03-24)
+
+### Bug Fixes
+- Fixed minimized window restoration on macOS — `focus-app` now clicks dock icon to restore minimized windows (previously only handled hidden apps)
+- Fixed `cmd_scroll` horizontal direction executing twice (once in try/except, once unconditionally)
+- Fixed `cmd_screenshot` file descriptor leak from `mkstemp` (fd was never closed)
+- Fixed `cmd_pixel_color` using deprecated `tempfile.mktemp` (replaced with safe `mkstemp`)
+- Fixed `cmd_front_window_bounds` crashing when window title contains `|` character (now uses `rsplit`)
+- Fixed `cmd_insert_newline` not catching `SystemExit` — now properly outputs JSON error via `jerror`
+- Fixed `cmd_drag` cliclick path ignoring `--duration` parameter (now inserts `w:` wait command)
+- Fixed `cmd_type` final pyautogui fallback silently skipping CJK/Unicode text (now errors with hint)
+- Added missing `find_running_app` function (2 tests were failing)
+- Moved `import time` to module top level (was late-imported in function body)
+
+## v1.0.1-urgent (2026-03-24)
+
+### Urgent Fixes
+- separated literal line breaks from send actions in `desktop_ops.py`
+- added `insert-newline` so multi-line messages no longer depend on send-key behavior
+- normalized Enter-like send keys so `press --key return` always maps to a real key press path
+- documented that WeChat and similar direct-Enter chat apps should send via `press --key return`, not via `type --text` with `\n`
+- documented that Windows WeChat should prefer the visible `发送` button instead of relying on Enter-to-send when the button is available
+
+### Packaging
+- prepared an urgent pure-skill ZIP package using the same base version with an `-urgent` suffix
+
 ## v1.0.1 (2026-03-24)
 
 ### Packaging & Release

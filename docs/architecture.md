@@ -20,7 +20,7 @@ graph TB
     end
 
     subgraph "Action Layer"
-        H[desktop_ops.py<br/>17 Operations]
+        H[desktop_ops.py<br/>18 Operations]
     end
 
     subgraph "Platform Backends"

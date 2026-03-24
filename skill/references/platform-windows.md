@@ -29,3 +29,12 @@ Aim to match the macOS helper surface:
 ## Behavior rule
 
 Keep the top-level workflow the same across platforms; only the helper implementation should differ.
+
+## Windows WeChat note
+
+For WeChat on Windows, first check for the visible `发送` button and prefer it as the send trigger.
+
+- type message text with `desktop_ops.py type --text`
+- if a literal line break is needed, use `desktop_ops.py insert-newline`
+- resolve the visible `发送` button with `target_resolver.py --text "发送"` and click it when verified
+- only fall back to `press --key return` if no verified send button exists and Enter-to-send is already confirmed for that host
