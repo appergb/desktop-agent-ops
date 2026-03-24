@@ -673,6 +673,15 @@ def cmd_insert_newline(count=1):
     jprint({"ok": True, "action": "insert-newline", "backend": backend, "count": count})
 
 
+_CLICLICK_SPECIAL_KEYS = {
+    "return", "enter", "tab", "escape", "esc", "delete", "backspace",
+    "space", "arrow-up", "arrow-down", "arrow-left", "arrow-right",
+    "home", "end", "page-up", "page-down", "fwd-delete",
+    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8",
+    "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16",
+}
+
+
 def cmd_hotkey(keys):
     cc = find_cliclick()
     if cc and platform.system().lower() == "darwin":
@@ -680,7 +689,13 @@ def cmd_hotkey(keys):
             run([cc, f"kp:{keys[0]}"])
         else:
             modifiers = ','.join(keys[:-1])
-            run([cc, f"kd:{modifiers}", f"kp:{keys[-1]}", f"ku:{modifiers}"])
+            last_key = keys[-1]
+            # cliclick kp: only accepts special keys; use t: for letters/characters
+            if last_key.lower() in _CLICLICK_SPECIAL_KEYS:
+                key_cmd = f"kp:{last_key}"
+            else:
+                key_cmd = f"t:{last_key}"
+            run([cc, f"kd:{modifiers}", key_cmd, f"ku:{modifiers}"])
         jprint({"ok": True, "action": "hotkey", "backend": "cliclick", "keys": keys})
         return
     pg = pyautogui_mod()
