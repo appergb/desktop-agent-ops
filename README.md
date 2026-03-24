@@ -204,7 +204,9 @@ desktop-agent-ops/
 │
 ├── skill/                             # ← Skill package (what agents use)
 │   ├── SKILL.md                       #   Agent operating manual
-│   ├── scripts/                       #   17 Python scripts (3171 lines)
+│   ├── agents/                        #   Skill UI metadata
+│   │   └── openai.yaml                #   Display name, prompt, policy
+│   ├── scripts/                       #   18 Python scripts
 │   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
 │   │   ├── desktop_ops.py             #   ⚙️ 17 desktop operations
 │   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
@@ -218,6 +220,7 @@ desktop-agent-ops/
 │   │   ├── smoke_test.py              #   🧪 Readiness test
 │   │   ├── doctor.py                  #   🏥 Health check
 │   │   ├── task_context.py            #   📝 Task state
+│   │   ├── task_paths.py              #   🔒 Safe task path resolution
 │   │   ├── cleanup_task.py            #   🧹 Cleanup
 │   │   ├── platform_probe.py          #   🔎 OS detection
 │   │   ├── targeting.py               #   📍 Candidate points
@@ -245,36 +248,38 @@ desktop-agent-ops/
 
 ## 📋 CLI Quick Reference
 
+All commands below assume you are running from the repository root.
+
 <details>
 <summary><b>desktop_ops.py — 17 Desktop Operations</b></summary>
 
 ```bash
 # Screenshot
-$PY scripts/desktop_ops.py screenshot [--output PATH] [--with-cursor]
-$PY scripts/desktop_ops.py capture-region --x X --y Y --width W --height H [--output PATH]
+$PY skill/scripts/desktop_ops.py screenshot [--output PATH] [--with-cursor]
+$PY skill/scripts/desktop_ops.py capture-region --x X --y Y --width W --height H [--output PATH]
 
 # App Management
-$PY scripts/desktop_ops.py frontmost
-$PY scripts/desktop_ops.py list-apps
-$PY scripts/desktop_ops.py focus-app --name "App Name"
-$PY scripts/desktop_ops.py front-window-bounds [--app "App Name"]
+$PY skill/scripts/desktop_ops.py frontmost
+$PY skill/scripts/desktop_ops.py list-apps
+$PY skill/scripts/desktop_ops.py focus-app --name "App Name"
+$PY skill/scripts/desktop_ops.py front-window-bounds [--app "App Name"]
 
 # Mouse
-$PY scripts/desktop_ops.py move --x X --y Y [--duration SECONDS]
-$PY scripts/desktop_ops.py click [--x X --y Y] [--button left|right|middle]
-$PY scripts/desktop_ops.py double-click [--x X --y Y]
-$PY scripts/desktop_ops.py drag --x1 X1 --y1 Y1 --x2 X2 --y2 Y2 [--duration SEC]
-$PY scripts/desktop_ops.py scroll --amount N [--x X --y Y] [--direction vertical|horizontal]
-$PY scripts/desktop_ops.py mouse-position
+$PY skill/scripts/desktop_ops.py move --x X --y Y [--duration SECONDS]
+$PY skill/scripts/desktop_ops.py click [--x X --y Y] [--button left|right|middle]
+$PY skill/scripts/desktop_ops.py double-click [--x X --y Y]
+$PY skill/scripts/desktop_ops.py drag --x1 X1 --y1 Y1 --x2 X2 --y2 Y2 [--duration SEC]
+$PY skill/scripts/desktop_ops.py scroll --amount N [--x X --y Y] [--direction vertical|horizontal]
+$PY skill/scripts/desktop_ops.py mouse-position
 
 # Keyboard
-$PY scripts/desktop_ops.py press --key KEY
-$PY scripts/desktop_ops.py type --text "text to type"
-$PY scripts/desktop_ops.py hotkey --keys cmd c
+$PY skill/scripts/desktop_ops.py press --key KEY
+$PY skill/scripts/desktop_ops.py type --text "text to type"
+$PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 
 # Screen Info
-$PY scripts/desktop_ops.py screen-size
-$PY scripts/desktop_ops.py pixel-color --x X --y Y
+$PY skill/scripts/desktop_ops.py screen-size
+$PY skill/scripts/desktop_ops.py pixel-color --x X --y Y
 ```
 
 </details>
@@ -284,13 +289,13 @@ $PY scripts/desktop_ops.py pixel-color --x X --y Y
 
 ```bash
 # Find element by visible text (OCR)
-$PY scripts/target_resolver.py --app "AppName" --text "button text" --python $PY
+$PY skill/scripts/target_resolver.py --app "AppName" --text "button text" --python $PY
 
 # Find by template image
-$PY scripts/target_resolver.py --app "AppName" --template /path/to/icon.png --python $PY
+$PY skill/scripts/target_resolver.py --app "AppName" --template /path/to/icon.png --python $PY
 
 # Narrow search to a window region
-$PY scripts/target_resolver.py --app "AppName" --text "Search" --region-label top_search --python $PY
+$PY skill/scripts/target_resolver.py --app "AppName" --text "Search" --region-label top_search --python $PY
 ```
 
 </details>
@@ -300,13 +305,13 @@ $PY scripts/target_resolver.py --app "AppName" --text "Search" --region-label to
 
 ```bash
 # OCR an app window (auto-detects language and DPI)
-$PY scripts/ocr_text.py --app "AppName" --python $PY
+$PY skill/scripts/ocr_text.py --app "AppName" --python $PY
 
 # OCR from an image file
-$PY scripts/ocr_text.py --image /path/to/screenshot.png --python $PY
+$PY skill/scripts/ocr_text.py --image /path/to/screenshot.png --python $PY
 
 # Force a specific language
-$PY scripts/ocr_text.py --app "AppName" --lang "eng+jpn" --python $PY
+$PY skill/scripts/ocr_text.py --app "AppName" --lang "eng+jpn" --python $PY
 ```
 
 </details>
@@ -315,9 +320,9 @@ $PY scripts/ocr_text.py --app "AppName" --lang "eng+jpn" --python $PY
 <summary><b>first_run_setup.py — Auto Setup</b></summary>
 
 ```bash
-python3 scripts/first_run_setup.py           # Full setup
-python3 scripts/first_run_setup.py --check   # Check readiness only
-python3 scripts/first_run_setup.py --force   # Force redo all stages
+python3 skill/scripts/first_run_setup.py           # Full setup
+python3 skill/scripts/first_run_setup.py --check   # Check readiness only
+python3 skill/scripts/first_run_setup.py --force   # Force redo all stages
 ```
 
 </details>

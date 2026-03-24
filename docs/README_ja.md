@@ -43,26 +43,26 @@ git clone https://github.com/appergb/desktop-agent-ops.git
 cd desktop-agent-ops
 
 # ワンコマンドセットアップ（すべての依存関係を自動インストール）
-python3 scripts/first_run_setup.py
+python3 skill/scripts/first_run_setup.py
 
 # 準備状態を確認
-python3 scripts/first_run_setup.py --check
+python3 skill/scripts/first_run_setup.py --check
 ```
 
 ### 使用例
 
 ```bash
 # 📸 スクリーンショット
-$PY scripts/desktop_ops.py screenshot --output screen.png
+$PY skill/scripts/desktop_ops.py screenshot --output screen.png
 
 # 🔍 アプリウィンドウ内のテキストを検索
-$PY scripts/target_resolver.py --app "Safari" --text "検索" --python $PY
+$PY skill/scripts/target_resolver.py --app "Safari" --text "検索" --python $PY
 
 # 🖱️ クリック
-$PY scripts/desktop_ops.py click --x 450 --y 520
+$PY skill/scripts/desktop_ops.py click --x 450 --y 520
 
 # ⌨️ テキスト入力（日本語対応）
-$PY scripts/desktop_ops.py type --text "こんにちは世界"
+$PY skill/scripts/desktop_ops.py type --text "こんにちは世界"
 ```
 
 ---

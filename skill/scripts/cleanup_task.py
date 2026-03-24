@@ -2,17 +2,15 @@
 import argparse
 import json
 import shutil
-import tempfile
-from pathlib import Path
 
-BASE = Path(tempfile.gettempdir()) / 'openclaw-desktop-agent'
+from task_paths import resolve_task_dir
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--task-id', required=True)
     args = ap.parse_args()
-    target = BASE / args.task_id
+    target = resolve_task_dir(args.task_id)
     existed = target.exists()
     if existed:
         shutil.rmtree(target, ignore_errors=True)

@@ -106,7 +106,7 @@ graph TB
 
 ### 作为 AI Agent 技能使用
 
-1. 将 `SKILL.md`、`scripts/`、`references/` 复制到技能目录
+1. 将整个 `skill/` 目录复制到技能目录
 2. Agent 首次使用时自动运行 `first_run_setup.py` —— **零手动配置**
 
 ### 手动安装使用
@@ -117,10 +117,10 @@ git clone https://github.com/appergb/desktop-agent-ops.git
 cd desktop-agent-ops
 
 # 一键安装所有依赖（自动安装 cliclick、tesseract、OCR 语言包、Python 虚拟环境、申请系统权限）
-python3 scripts/first_run_setup.py
+python3 skill/scripts/first_run_setup.py
 
 # 检查是否就绪
-python3 scripts/first_run_setup.py --check
+python3 skill/scripts/first_run_setup.py --check
 ```
 
 ### 使用示例
@@ -130,23 +130,23 @@ python3 scripts/first_run_setup.py --check
 PY=$(python3 -c "import json; print(json.load(open('$HOME/.openclaw-desktop-agent-ops/setup_state.json'))['env']['DESKTOP_AGENT_OPS_PYTHON'])")
 
 # 📸 截图
-$PY scripts/desktop_ops.py screenshot --output screen.png
+$PY skill/scripts/desktop_ops.py screenshot --output screen.png
 
 # 🔍 在应用窗口中找文字
-$PY scripts/target_resolver.py --app "微信" --text "发送" --python $PY
+$PY skill/scripts/target_resolver.py --app "微信" --text "发送" --python $PY
 # 返回: {best_candidate: {x: 450, y: 520, within_window: true}}
 
 # 🖱️ 点击
-$PY scripts/desktop_ops.py click --x 450 --y 520
+$PY skill/scripts/desktop_ops.py click --x 450 --y 520
 
 # ⌨️ 输入文字（支持中文）
-$PY scripts/desktop_ops.py type --text "你好世界"
+$PY skill/scripts/desktop_ops.py type --text "你好世界"
 
 # 📜 在指定窗口内滚动
-$PY scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
+$PY skill/scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
 
 # 🔑 快捷键
-$PY scripts/desktop_ops.py hotkey --keys cmd c
+$PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 ```
 
 ---
