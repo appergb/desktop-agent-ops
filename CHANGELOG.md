@@ -2,15 +2,23 @@
 
 ## v1.0.2 (2026-03-24)
 
+### Performance (7.6x faster end-to-end)
+- `cmd_type`: clipboard paste is now the primary path; cliclick `t:` silently dropped CJK characters
+- `paste_text` macOS: merged pbcopy + Cmd+V into a single osascript call (saves one subprocess)
+- `paste_text` Windows: use PowerShell `Set-Clipboard` for faster Unicode handling
+- `cmd_focus_app`: fast path skips Dock traversal when app is already frontmost
+- `cmd_focus_app`: reduced AppleScript delays from 0.3s to 0.15s; verification delay from 0.3s to 0.1s
+- Benchmarks (macOS, WeChat already frontmost): focus 0.29s + type 0.17s + send 0.13s = **0.59s total** (was 4.49s)
+
 ### Bug Fixes
 - Fixed minimized window restoration on macOS — `focus-app` now clicks dock icon to restore minimized windows (previously only handled hidden apps)
+- Fixed `cmd_type` dropping CJK text — cliclick was first choice but silently skips non-ASCII; now clipboard paste is always first
 - Fixed `cmd_scroll` horizontal direction executing twice (once in try/except, once unconditionally)
 - Fixed `cmd_screenshot` file descriptor leak from `mkstemp` (fd was never closed)
 - Fixed `cmd_pixel_color` using deprecated `tempfile.mktemp` (replaced with safe `mkstemp`)
 - Fixed `cmd_front_window_bounds` crashing when window title contains `|` character (now uses `rsplit`)
 - Fixed `cmd_insert_newline` not catching `SystemExit` — now properly outputs JSON error via `jerror`
 - Fixed `cmd_drag` cliclick path ignoring `--duration` parameter (now inserts `w:` wait command)
-- Fixed `cmd_type` final pyautogui fallback silently skipping CJK/Unicode text (now errors with hint)
 - Added missing `find_running_app` function (2 tests were failing)
 - Moved `import time` to module top level (was late-imported in function body)
 

@@ -262,34 +262,40 @@ def cmd_focus_app(name):
     system = platform.system().lower()
     if system == "darwin":
         app_name = escape_applescript_string(name)
-        # Multi-step activation to handle background/minimized/hidden apps:
-        # 1. Make app visible (unhide if hidden)
-        # 2. Activate the app (bring to front)
-        # 3. Set frontmost via System Events (force focus)
-        # 4. Raise the first window if it exists
+
+        # Fast path: check if already frontmost — skip everything if so
+        check = osascript('tell application "System Events" to get name of first application process whose frontmost is true', "focus-app", system)
+        if check.get("ok") and name.lower() in check.get("stdout", "").lower():
+            # Already frontmost, just ensure window is raised
+            osascript(f'''tell application "System Events"
+    tell process "{app_name}"
+        try
+            perform action "AXRaise" of window 1
+        end try
+    end tell
+end tell''', "focus-app", system)
+            jprint({"ok": True, "action": "focus-app", "app": name, "verified_frontmost": True})
+            return
+
+        # Full activation: unhide + restore minimized + activate + raise
         script = f'''
 tell application "System Events"
     set appExists to (exists process "{app_name}")
 end tell
 
 if appExists then
-    -- Step 1: Unhide the app if hidden
     tell application "System Events"
         set visible of process "{app_name}" to true
     end tell
-    -- Step 2: Restore minimized windows by clicking dock icon
-    -- (Using dock click is more reliable than miniaturized property
-    --  which can hang on non-native apps like WeChat)
+    -- Restore minimized windows via Dock click
     try
         tell application "System Events"
             tell process "Dock"
-                set dockItems to every UI element of list 1
-                repeat with dockItem in dockItems
+                repeat with dockItem in (every UI element of list 1)
                     try
                         if name of dockItem is "{app_name}" then
-                            -- Click dock icon to restore minimized window
                             click dockItem
-                            delay 0.3
+                            delay 0.15
                             exit repeat
                         end if
                     end try
@@ -297,10 +303,8 @@ if appExists then
             end tell
         end tell
     end try
-    -- Step 3: Activate the app (bring to front)
     tell application "{app_name}" to activate
-    delay 0.3
-    -- Step 4: Force focus and raise window
+    delay 0.15
     tell application "System Events"
         tell process "{app_name}"
             set frontmost to true
@@ -310,20 +314,18 @@ if appExists then
         end tell
     end tell
 else
-    -- App not running, try to launch it
     tell application "{app_name}" to activate
 end if
 '''
         result = osascript(script, "focus-app", system)
         if not result["ok"]:
-            # Fallback: simple activate
             fallback = osascript(f'tell application "{app_name}" to activate', "focus-app", system)
             if not fallback["ok"]:
                 jerror("focus-app", fallback["stderr"] or "osascript_failed", system, hint=fallback.get("hint"))
                 return
 
-        # Verify the app actually came to front
-        time.sleep(0.3)
+        # Quick verify
+        time.sleep(0.1)
         verify = osascript('tell application "System Events" to get name of first application process whose frontmost is true', "focus-app", system)
         is_front = verify.get("ok") and name.lower() in verify.get("stdout", "").lower()
 
@@ -580,21 +582,37 @@ def _key_to_keycode(key_name):
 
 
 def paste_text(text, action_name='type'):
-    """Paste literal text so apps receive inserted content instead of a synthetic key action."""
+    """Paste literal text via clipboard — single fast operation per platform."""
     system = platform.system().lower()
 
     if system == 'darwin':
-        subprocess.run(['pbcopy'], input=text.encode('utf-8'), check=True)
-        result = osascript('tell application "System Events" to keystroke "v" using command down', action_name, system)
+        # Single osascript: set clipboard + Cmd+V in one call (avoids extra subprocess)
+        escaped = escape_applescript_string(text)
+        script = f'''set the clipboard to "{escaped}"
+delay 0.05
+tell application "System Events" to keystroke "v" using command down'''
+        result = osascript(script, action_name, system)
         if result['ok']:
-            return 'applescript_paste'
-        raise SystemExit(result['stderr'] or 'paste_failed')
+            return 'clipboard_paste'
+        # Fallback: pbcopy + osascript Cmd+V (for text with special chars)
+        subprocess.run(['pbcopy'], input=text.encode('utf-8'), check=True)
+        result2 = osascript('tell application "System Events" to keystroke "v" using command down', action_name, system)
+        if result2['ok']:
+            return 'pbcopy_paste'
+        raise SystemExit(result2['stderr'] or 'paste_failed')
 
     if system == 'windows':
-        subprocess.run(['clip'], input=text.encode('utf-16le'), check=True)
+        # PowerShell Set-Clipboard is faster than clip.exe for Unicode
+        try:
+            subprocess.run(
+                ['powershell', '-NoProfile', '-Command',
+                 f'Set-Clipboard -Value "{text.replace(chr(34), "`" + chr(34))}"'],
+                check=True, capture_output=True, timeout=5)
+        except Exception:
+            subprocess.run(['clip'], input=text.encode('utf-16le'), check=True)
         pg = pyautogui_mod()
         pg.hotkey('ctrl', 'v')
-        return 'clip_paste'
+        return 'clipboard_paste'
 
     if system == 'linux' and shutil.which('xclip'):
         subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode('utf-8'), check=True)
@@ -605,50 +623,38 @@ def paste_text(text, action_name='type'):
     raise SystemExit('literal_paste_unavailable')
 
 
+def _has_non_ascii(text):
+    return any(ord(c) > 127 for c in text)
+
+
 def cmd_type(text):
     system = platform.system().lower()
-    cc = find_cliclick()
+    has_cjk = _has_non_ascii(text)
 
+    # Primary path: clipboard paste — fast, reliable for ALL text including CJK
+    # cliclick t: silently drops CJK characters, so clipboard is always preferred
+    try:
+        backend = paste_text(text, action_name='type')
+        jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
+        return
+    except Exception:
+        pass
+
+    # Fallback for pure ASCII: cliclick (macOS) or pyautogui
+    if has_cjk:
+        jerror("type", "non_ascii_text_requires_clipboard_paste", system,
+               hint="check_pbcopy_or_xclip_availability")
+        return
+
+    cc = find_cliclick()
     if cc and system == "darwin":
         try:
             run([cc, f"t:{text}"])
             jprint({"ok": True, "action": "type", "backend": "cliclick", "text_length": len(text)})
             return
         except SystemExit:
-            pass  # cliclick failed, try AppleScript
-
-    # AppleScript fallback — handles Unicode/CJK text that cliclick may not support
-    if system == "darwin":
-        try:
-            backend = paste_text(text, action_name='type')
-            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
-            return
-        except Exception:
             pass
 
-    # Windows clipboard-paste fallback for CJK/Unicode text
-    if system == "windows":
-        try:
-            backend = paste_text(text, action_name='type')
-            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
-            return
-        except Exception:
-            pass
-
-    # Linux clipboard-paste fallback for CJK/Unicode text
-    if system == "linux" and shutil.which("xclip"):
-        try:
-            backend = paste_text(text, action_name='type')
-            jprint({"ok": True, "action": "type", "backend": backend, "text_length": len(text)})
-            return
-        except Exception:
-            pass
-
-    # Final fallback: pyautogui.write (ASCII only — CJK/Unicode will be silently skipped)
-    if any(ord(c) > 127 for c in text):
-        jerror("type", "non_ascii_text_requires_clipboard_paste", platform.system().lower(),
-               hint="install_xclip_on_linux_or_check_permissions")
-        return
     pg = pyautogui_mod()
     pg.write(text, interval=0.0)
     jprint({"ok": True, "action": "type", "backend": "pyautogui", "text_length": len(text)})
