@@ -24,6 +24,11 @@
 - Added missing `find_running_app` function (2 tests were failing)
 - Moved `import time` to module top level (was late-imported in function body)
 
+### Documentation
+- Added 8 new example cases (Case 12–19): right-click, drag-and-drop, system settings, form filling, dropdown, toggle/slider, cross-app copy-paste, browser tab management
+- Added 8 matching reusable operation patterns
+- Updated README.md platform table, SKILL.md backend priority table, platform-macos.md, platform-windows.md
+
 ## v1.0.1-urgent (2026-03-24)
 
 ### Urgent Fixes

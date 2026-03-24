@@ -31,12 +31,27 @@ Major reliability and performance release. Fixes CJK text input, Enter-to-send, 
 - Added missing `find_running_app` function (2 tests were failing)
 - `import time` moved to module top level
 
+## New Example Cases (举一反三)
+
+8 new desktop operation scenarios added to `example-cases.md` and `operation-patterns.md`:
+
+- Case 12: Right-click context menu operation
+- Case 13: Drag and drop between locations
+- Case 14: Navigate system settings (multi-panel)
+- Case 15: Fill a multi-field form
+- Case 16: Select from a dropdown or combo box
+- Case 17: Toggle a switch or adjust a slider
+- Case 18: Switch between multiple apps (cross-app copy-paste)
+- Case 19: Browser tab management
+
 ## Documentation Updates
 
-- README.md: updated platform table with new backend priorities
-- SKILL.md: added backend priority table, updated text input docs
-- platform-macos.md: documented clipboard-first input, AppleScript key press, focus-app fast path
+- README.md: updated platform table with new backend priorities, 18 operations count
+- SKILL.md: added backend priority table, updated text input docs, cliclick warnings
+- platform-macos.md: documented clipboard-first input, AppleScript key press, focus-app fast path, timing values
 - platform-windows.md: documented PowerShell clipboard, pyautogui input
+- example-cases.md: expanded from 11 to 19 cases
+- operation-patterns.md: added 8 new reusable patterns
 - CHANGELOG.md: complete v1.0.2 history
 
 ## Test Results
