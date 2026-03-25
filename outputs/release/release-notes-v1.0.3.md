@@ -1,4 +1,4 @@
-# Release Notes — v1.0.2 (2026-03-24)
+# Release Notes — v1.0.3 (2026-03-25)
 
 ## Summary
 
