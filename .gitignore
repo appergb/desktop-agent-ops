@@ -31,3 +31,6 @@ permissions.json
 # Screenshots (generated at runtime)
 *.png
 !references/*.png
+
+# Planning and analysis docs (local only)
+_planning/

@@ -151,6 +151,47 @@ $PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 
 ---
 
+## 🔄 自定义工作流
+
+用 Markdown + YAML 定义可复用的多步桌面自动化流程。
+
+### 工作流命令
+
+```bash
+# 列出可用工作流
+$PY skill/scripts/workflow_runner.py list
+
+# 预览命令（Agent 执行前审查安全性）
+$PY skill/scripts/workflow_runner.py preview --workflow "send-chat-message" \
+  --param contact="张三" --param message="你好"
+
+# 运行工作流
+$PY skill/scripts/workflow_runner.py run --workflow "send-chat-message" \
+  --param contact="张三" --param message="你好"
+
+# 分享工作流到社区（通过 GitHub PR）
+$PY skill/scripts/workflow_share.py share --workflow "my-workflow"
+```
+
+### 内置示例
+
+| 工作流 | 说明 |
+|--------|------|
+| `send-chat-message` | 在微信/Slack/Teams 发送消息 |
+| `browser-search` | 打开浏览器搜索 |
+| `open-app-and-click` | 打开应用并点击目标元素 |
+
+### 创建自定义工作流
+
+将 `.md` 文件保存到 `~/.openclaw-desktop-agent-ops/workflows/`。详见 [工作流编写指南](../skill/references/custom-workflows.md)。
+
+### 安全机制
+
+- **Agent 自主审查**：执行前 Agent 预览所有命令，用自身推理判断安全性——无硬编码白名单
+- **敏感信息扫描**：分享前自动检测 API Key、Token、密码、个人路径，error 级发现阻止上传
+
+---
+
 ## 🔧 自动安装管线
 
 `first_run_setup.py` 一条命令搞定所有安装：

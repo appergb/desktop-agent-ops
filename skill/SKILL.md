@@ -1,7 +1,7 @@
 ---
 name: desktop-agent-ops
 description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
-version: 1.0.3
+version: 1.1.0
 metadata:
   openclaw:
     requires:
@@ -351,13 +351,14 @@ Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `conte
 7. $PY desktop_ops.py screenshot → confirm conversation title
 8. # Click the input field
 9. $PY target_resolver.py --app "WeChat" --text "" --region-label bottom_input --python $PY
-   OR: click at the bottom center of the window
-10. $PY desktop_ops.py type --text "Hello!"
-11. # Send: prefer visible send button; if not available, use press --key return
-12. $PY target_resolver.py --app "WeChat" --text "发送" --python $PY
+10. $PY desktop_ops.py click --x <found_x> --y <found_y>
+11. $PY desktop_ops.py type --text "Hello!"
+12. $PY desktop_ops.py screenshot → verify typed text visible in composer
+13. # Send: MUST use --region-label to avoid matching message text that contains "发送"
+14. $PY target_resolver.py --app "WeChat" --text "发送" --region-label primary_action --python $PY
     IF found: $PY desktop_ops.py click --x <x> --y <y>
     ELSE: $PY desktop_ops.py press --key return
-13. $PY desktop_ops.py screenshot → verify message sent
+15. $PY desktop_ops.py screenshot → verify message sent
 ```
 
 ### Example 4: Scroll a list and find an item
@@ -391,21 +392,21 @@ Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `conte
 
 ## Reference Documents
 
-Load as needed:
+**MUST-read rules**: Read the matching reference BEFORE starting the task. Do not skip.
 
 | Document | When to read |
 |----------|-------------|
 | `references/workflow.md` | Core 8-step closed loop |
-| `references/platform-macos.md` | macOS-specific tools and permissions |
-| `references/platform-windows.md` | Windows setup |
-| `references/platform-linux.md` | Linux X11/Wayland setup |
+| `references/platform-macos.md` | **MUST** when running on macOS |
+| `references/platform-windows.md` | **MUST** when running on Windows |
+| `references/platform-linux.md` | **MUST** when running on Linux |
 | `references/operation-patterns.md` | Reusable task templates |
-| `references/validation-patterns.md` | Two-stage validation |
-| `references/precise-targeting.md` | 5-layer precision targeting |
+| `references/validation-patterns.md` | **MUST** when task involves send, delete, or other destructive actions |
+| `references/precise-targeting.md` | **MUST** when OCR finds nothing or click misses target |
 | `references/target-providers.md` | Provider ordering and fallback contract |
 | `references/coordinate-reconstruction.md` | Rebuild click coordinates from screenshot evidence |
-| `references/chat-app-macos.md` | Chat app workflow |
-| `references/app-wechat-desktop.md` | Cross-platform WeChat guidance |
+| `references/chat-app-macos.md` | **MUST** when target app is a chat app (WeChat, Slack, Telegram, etc.) |
+| `references/app-wechat-desktop.md` | **MUST** when target app is WeChat |
 | `references/cleanup-rules.md` | Cleanup timing and scope |
 | `references/collaboration-rules.md` | When multi-agent collaboration is justified |
 | `references/example-cases.md` | Repeatable task examples |
@@ -430,3 +431,57 @@ Use this skill for: chat apps, browsers, file managers, editors, office apps, sy
 11. **Maximum 3 retries per action; each retry must recapture fresh state**
 12. **Cleanup is mandatory at task end**
 13. **If verification fails, recapture and rebuild — do not retry blindly**
+
+---
+
+## Custom Workflows
+
+Users can create reusable multi-step workflows and share them with the community.
+
+### Workflow CLI
+
+```bash
+# List available workflows (built-in + user-created)
+$PY scripts/workflow_runner.py list
+
+# Show workflow details
+$PY scripts/workflow_runner.py show --workflow "send-chat-message"
+
+# Validate a workflow (format check)
+$PY scripts/workflow_runner.py validate --workflow "send-chat-message"
+
+# Preview resolved commands (for safety review before execution)
+$PY scripts/workflow_runner.py preview --workflow "send-chat-message" --param contact="John" --param message="Hello"
+
+# Run a workflow
+$PY scripts/workflow_runner.py run --workflow "send-chat-message" --param contact="John" --param message="Hello"
+
+# Share a workflow to the community via GitHub PR
+$PY scripts/workflow_share.py share --workflow "send-chat-message"
+```
+
+### Agent Safety Review Protocol
+
+Before running any workflow, the agent MUST:
+1. Call `preview` to see all resolved commands
+2. Review each command using your own reasoning — judge whether it is safe
+3. If any command looks risky (deletion, network exfiltration, system config changes), explain the risk to the user and ask for confirmation
+4. Only call `run` after confirming safety
+
+This is NOT a whitelist approach — workflows can contain any command for maximum extensibility. Safety relies on the agent's judgment, not hardcoded rules.
+
+### Workflow File Location
+
+- Built-in workflows: `skill/workflows/`
+- User workflows: `~/.openclaw-desktop-agent-ops/workflows/`
+- User workflows override built-in ones with the same name
+
+### Sharing Workflows
+
+After a user creates a custom workflow, ask: "Workflow validated. Would you like to share it with the community?"
+
+If yes, run `workflow_share.py share --workflow "name"`. The script will:
+1. Validate workflow format
+2. Scan for sensitive information (API keys, passwords, personal paths are blocked)
+3. Fork the repo and create a GitHub PR to contribute the workflow
+4. Return the PR URL to the user

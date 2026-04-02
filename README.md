@@ -32,6 +32,9 @@ It provides a complete pipeline from **screen observation** to **precise clickin
 | ⌨️ **CJK Text Input** | Reliable Chinese/Japanese/Korean input via clipboard-paste fallback |
 | 🔧 **One-Command Setup** | `first_run_setup.py` auto-installs everything on first use |
 | 🖱️ **18 Operations** | Screenshot, click, type, insert-newline, scroll, drag, hotkey, focus-app, and more |
+| 🔄 **Custom Workflows** | Define reusable multi-step automations in Markdown + YAML |
+| 🔗 **Workflow Sharing** | Contribute workflows to community via GitHub PR |
+| 🔐 **Secret Scanner** | Auto-detect hardcoded credentials before sharing |
 
 ---
 
@@ -154,6 +157,47 @@ $PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 
 ---
 
+## 🔄 Custom Workflows
+
+Define reusable multi-step desktop automations as Markdown files with YAML frontmatter.
+
+### Workflow Commands
+
+```bash
+# List available workflows
+$PY skill/scripts/workflow_runner.py list
+
+# Preview commands before execution (Agent reviews for safety)
+$PY skill/scripts/workflow_runner.py preview --workflow "send-chat-message" \
+  --param contact="John" --param message="Hello"
+
+# Run a workflow
+$PY skill/scripts/workflow_runner.py run --workflow "send-chat-message" \
+  --param contact="John" --param message="Hello"
+
+# Share a workflow to the community via GitHub PR
+$PY skill/scripts/workflow_share.py share --workflow "my-workflow"
+```
+
+### Bundled Examples
+
+| Workflow | Description |
+|----------|-------------|
+| `send-chat-message` | Send a message in WeChat/Slack/Teams |
+| `browser-search` | Open browser and search for a query |
+| `open-app-and-click` | Open an app and click a target element |
+
+### Create Your Own
+
+Save `.md` files to `~/.openclaw-desktop-agent-ops/workflows/`. See [Workflow Guide](skill/references/custom-workflows.md) for format details.
+
+### Security
+
+- **Agent Safety Review**: Before execution, the agent previews all commands and judges safety using its own reasoning — no hardcoded whitelist
+- **Secret Scanner**: Before sharing, `secret_scanner.py` detects API keys, tokens, passwords, and personal paths. Error-level findings block upload
+
+---
+
 ## 🔧 Auto-Setup Pipeline
 
 `first_run_setup.py` handles **everything** in one command:
@@ -210,7 +254,9 @@ desktop-agent-ops/
 │   ├── SKILL.md                       #   Agent operating manual
 │   ├── agents/                        #   Skill UI metadata
 │   │   └── openai.yaml                #   Display name, prompt, policy
-│   ├── scripts/                       #   18 Python scripts
+│   ├── workflows/                     #   Custom workflow definitions
+│   │   └── examples/                  #   3 bundled example workflows
+│   ├── scripts/                       #   Python scripts
 │   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
 │   │   ├── desktop_ops.py             #   ⚙️ 18 desktop operations
 │   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
@@ -228,9 +274,14 @@ desktop-agent-ops/
 │   │   ├── cleanup_task.py            #   🧹 Cleanup
 │   │   ├── platform_probe.py          #   🔎 OS detection
 │   │   ├── targeting.py               #   📍 Candidate points
-│   │   └── bootstrap_env.py           #   📦 Legacy venv setup
-│   └── references/                    #   17 reference documents
+│   │   ├── bootstrap_env.py           #   📦 Legacy venv setup
+│   │   ├── workflow_loader.py         #   🔄 Workflow discovery & parsing
+│   │   ├── workflow_runner.py         #   🚀 Workflow execution engine
+│   │   ├── secret_scanner.py          #   🔐 Sensitive info detection
+│   │   └── workflow_share.py          #   🔗 Community sharing via PR
+│   └── references/                    #   Reference documents
 │       ├── workflow.md                #   Core 8-step loop
+│       ├── custom-workflows.md        #   Workflow format guide
 │       ├── platform-macos.md          #   macOS guidance
 │       ├── platform-windows.md        #   Windows guidance
 │       ├── platform-linux.md          #   Linux guidance
