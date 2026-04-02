@@ -48,3 +48,23 @@ class GeometryTests(unittest.TestCase):
             '--height', '4',
         ])
         self.assertFalse(args.with_cursor)
+
+    def test_normalize_press_key_treats_enter_like_values_as_return(self):
+        self.assertEqual(desktop_ops.normalize_press_key('enter'), 'return')
+        self.assertEqual(desktop_ops.normalize_press_key('return'), 'return')
+        self.assertEqual(desktop_ops.normalize_press_key('newline'), 'newline')
+
+    def test_pyautogui_key_name_maps_return_to_enter(self):
+        self.assertEqual(desktop_ops.pyautogui_key_name('return'), 'enter')
+
+    def test_insert_newline_parser_has_default_count(self):
+        args = desktop_ops.build_parser().parse_args(['insert-newline'])
+        self.assertEqual(args.count, 1)
+
+    def test_find_running_app_matches_exact_normalized_name(self):
+        candidates = ['WeChat', 'Safari']
+        self.assertEqual(desktop_ops.find_running_app('wechat', candidates), 'WeChat')
+
+    def test_find_running_app_does_not_alias_unseen_name(self):
+        candidates = ['WeChat', 'Safari']
+        self.assertIsNone(desktop_ops.find_running_app('微信', candidates))

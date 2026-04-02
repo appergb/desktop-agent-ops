@@ -1,4 +1,4 @@
-# WeChat on macOS
+# WeChat on Windows
 
 Use `app-wechat-desktop.md` as the primary WeChat reference.
 

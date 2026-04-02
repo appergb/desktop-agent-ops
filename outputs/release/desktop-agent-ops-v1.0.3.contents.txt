@@ -1,0 +1,50 @@
+Archive:  desktop-agent-ops-v1.0.3.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  03-25-2026 12:57   desktop-agent-ops/
+     5426  03-25-2026 12:57   desktop-agent-ops/CHANGELOG.md
+        0  03-25-2026 12:57   desktop-agent-ops/references/
+     1640  03-25-2026 12:57   desktop-agent-ops/references/platform-windows.md
+     3249  03-25-2026 12:57   desktop-agent-ops/references/platform-macos.md
+     3510  03-25-2026 12:57   desktop-agent-ops/references/workflow.md
+      802  03-25-2026 12:57   desktop-agent-ops/references/collaboration-rules.md
+     5611  03-25-2026 12:57   desktop-agent-ops/references/operation-patterns.md
+     2772  03-25-2026 12:57   desktop-agent-ops/references/app-wechat-desktop.md
+     1252  03-25-2026 12:57   desktop-agent-ops/references/cleanup-rules.md
+     2755  03-25-2026 12:57   desktop-agent-ops/references/eval-scenarios.md
+     1026  03-25-2026 12:57   desktop-agent-ops/references/target-providers.md
+      158  03-25-2026 12:57   desktop-agent-ops/references/app-wechat-macos.md
+      160  03-25-2026 12:57   desktop-agent-ops/references/app-wechat-windows.md
+    18454  03-25-2026 12:57   desktop-agent-ops/references/example-cases.md
+     3575  03-25-2026 12:57   desktop-agent-ops/references/chat-app-macos.md
+    21713  03-25-2026 12:57   desktop-agent-ops/references/market-precision-targeting-gap-analysis.md
+     2347  03-25-2026 12:57   desktop-agent-ops/references/coordinate-reconstruction.md
+     3310  03-25-2026 12:57   desktop-agent-ops/references/reproducible-setup.md
+      853  03-25-2026 12:57   desktop-agent-ops/references/platform-linux.md
+     2592  03-25-2026 12:57   desktop-agent-ops/references/validation-patterns.md
+     3278  03-25-2026 12:57   desktop-agent-ops/references/precise-targeting.md
+        0  03-25-2026 12:57   desktop-agent-ops/agents/
+      318  03-25-2026 12:57   desktop-agent-ops/agents/openai.yaml
+        0  03-25-2026 12:57   desktop-agent-ops/scripts/
+     3305  03-25-2026 12:57   desktop-agent-ops/scripts/smoke_test.py
+      972  03-25-2026 12:57   desktop-agent-ops/scripts/task_paths.py
+    22340  03-25-2026 12:57   desktop-agent-ops/scripts/first_run_setup.py
+     9875  03-25-2026 12:57   desktop-agent-ops/scripts/ocr_text.py
+     4382  03-25-2026 12:57   desktop-agent-ops/scripts/template_match.py
+    32740  03-25-2026 12:57   desktop-agent-ops/scripts/desktop_ops.py
+    11148  03-25-2026 12:57   desktop-agent-ops/scripts/target_resolver.py
+     2119  03-25-2026 12:57   desktop-agent-ops/scripts/target_report.py
+     8387  03-25-2026 12:57   desktop-agent-ops/scripts/permission_bootstrap.py
+     2257  03-25-2026 12:57   desktop-agent-ops/scripts/bootstrap_env.py
+      511  03-25-2026 12:57   desktop-agent-ops/scripts/cleanup_task.py
+     3247  03-25-2026 12:57   desktop-agent-ops/scripts/region_diff.py
+     2370  03-25-2026 12:57   desktop-agent-ops/scripts/window_regions.py
+      362  03-25-2026 12:57   desktop-agent-ops/scripts/platform_probe.py
+     4257  03-25-2026 12:57   desktop-agent-ops/scripts/click_and_verify.py
+     2961  03-25-2026 12:57   desktop-agent-ops/scripts/targeting.py
+     1374  03-25-2026 12:57   desktop-agent-ops/scripts/task_context.py
+     2161  03-25-2026 12:57   desktop-agent-ops/scripts/doctor.py
+    19155  03-25-2026 12:57   desktop-agent-ops/SKILL.md
+     3179  03-25-2026 12:57   desktop-agent-ops/release-notes-v1.0.3.md
+---------                     -------
+   221903                     45 files

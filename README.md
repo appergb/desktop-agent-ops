@@ -31,7 +31,10 @@ It provides a complete pipeline from **screen observation** to **precise clickin
 | 🌐 **Multi-Language OCR** | Auto-detects system language and installs matching Tesseract packs |
 | ⌨️ **CJK Text Input** | Reliable Chinese/Japanese/Korean input via clipboard-paste fallback |
 | 🔧 **One-Command Setup** | `first_run_setup.py` auto-installs everything on first use |
-| 🖱️ **17 Operations** | Screenshot, click, type, scroll, drag, hotkey, focus-app, and more |
+| 🖱️ **18 Operations** | Screenshot, click, type, insert-newline, scroll, drag, hotkey, focus-app, and more |
+| 🔄 **Custom Workflows** | Define reusable multi-step automations in Markdown + YAML |
+| 🔗 **Workflow Sharing** | Contribute workflows to community via GitHub PR |
+| 🔐 **Secret Scanner** | Auto-detect hardcoded credentials before sharing |
 
 ---
 
@@ -51,7 +54,7 @@ graph TB
         F[template_match.py]
     end
     subgraph "⚙️ Action Layer"
-        H[desktop_ops.py<br/>17 Operations]
+        H[desktop_ops.py<br/>18 Operations]
     end
     subgraph "💻 Platform"
         I[macOS]
@@ -142,12 +145,56 @@ $PY skill/scripts/desktop_ops.py click --x 450 --y 520
 # ⌨️ Type text (CJK supported via clipboard-paste)
 $PY skill/scripts/desktop_ops.py type --text "Hello World"
 
+# ↩️ Insert a literal newline without sending
+$PY skill/scripts/desktop_ops.py insert-newline
+
 # 📜 Scroll within a specific window
 $PY skill/scripts/desktop_ops.py scroll --amount -5 --x 500 --y 400
 
 # 🔑 Keyboard shortcut
 $PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 ```
+
+---
+
+## 🔄 Custom Workflows
+
+Define reusable multi-step desktop automations as Markdown files with YAML frontmatter.
+
+### Workflow Commands
+
+```bash
+# List available workflows
+$PY skill/scripts/workflow_runner.py list
+
+# Preview commands before execution (Agent reviews for safety)
+$PY skill/scripts/workflow_runner.py preview --workflow "send-chat-message" \
+  --param contact="John" --param message="Hello"
+
+# Run a workflow
+$PY skill/scripts/workflow_runner.py run --workflow "send-chat-message" \
+  --param contact="John" --param message="Hello"
+
+# Share a workflow to the community via GitHub PR
+$PY skill/scripts/workflow_share.py share --workflow "my-workflow"
+```
+
+### Bundled Examples
+
+| Workflow | Description |
+|----------|-------------|
+| `send-chat-message` | Send a message in WeChat/Slack/Teams |
+| `browser-search` | Open browser and search for a query |
+| `open-app-and-click` | Open an app and click a target element |
+
+### Create Your Own
+
+Save `.md` files to `~/.openclaw-desktop-agent-ops/workflows/`. See [Workflow Guide](skill/references/custom-workflows.md) for format details.
+
+### Security
+
+- **Agent Safety Review**: Before execution, the agent previews all commands and judges safety using its own reasoning — no hardcoded whitelist
+- **Secret Scanner**: Before sharing, `secret_scanner.py` detects API keys, tokens, passwords, and personal paths. Error-level findings block upload
 
 ---
 
@@ -182,14 +229,15 @@ flowchart LR
 | Feature | macOS | Windows | Linux (X11) |
 |---------|-------|---------|-------------|
 | Screenshot | screencapture | pyautogui | pyautogui/scrot |
-| Mouse/Keyboard | cliclick → pyautogui | pyautogui | pyautogui |
+| Mouse | cliclick → pyautogui | pyautogui | pyautogui |
 | Window focus | AppleScript | pygetwindow | wmctrl |
 | Window bounds | AppleScript | pygetwindow | xdotool |
 | App list | AppleScript | pygetwindow | wmctrl |
 | OCR | pytesseract | pytesseract | pytesseract |
-| CJK input | AppleScript paste | clip.exe + Ctrl+V | xclip + Ctrl+V |
+| Text input | Clipboard paste (all text) | Clipboard paste (PowerShell/clip) | Clipboard paste (xclip) |
+| Key press | AppleScript key code → cliclick | pyautogui | pyautogui |
+| Hotkey | cliclick (modifier+key) → pyautogui | pyautogui | pyautogui |
 | DPI detection | Auto (2x Retina) | Auto (1.25x-2x) | Auto (1x-2x) |
-| Key fallback | AppleScript key code | pyautogui | pyautogui |
 
 ---
 
@@ -206,9 +254,11 @@ desktop-agent-ops/
 │   ├── SKILL.md                       #   Agent operating manual
 │   ├── agents/                        #   Skill UI metadata
 │   │   └── openai.yaml                #   Display name, prompt, policy
-│   ├── scripts/                       #   18 Python scripts
+│   ├── workflows/                     #   Custom workflow definitions
+│   │   └── examples/                  #   3 bundled example workflows
+│   ├── scripts/                       #   Python scripts
 │   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
-│   │   ├── desktop_ops.py             #   ⚙️ 17 desktop operations
+│   │   ├── desktop_ops.py             #   ⚙️ 18 desktop operations
 │   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
 │   │   ├── ocr_text.py                #   🔍 Multi-lang OCR + DPI
 │   │   ├── permission_bootstrap.py    #   🔐 OS permission requests
@@ -224,9 +274,14 @@ desktop-agent-ops/
 │   │   ├── cleanup_task.py            #   🧹 Cleanup
 │   │   ├── platform_probe.py          #   🔎 OS detection
 │   │   ├── targeting.py               #   📍 Candidate points
-│   │   └── bootstrap_env.py           #   📦 Legacy venv setup
-│   └── references/                    #   17 reference documents
+│   │   ├── bootstrap_env.py           #   📦 Legacy venv setup
+│   │   ├── workflow_loader.py         #   🔄 Workflow discovery & parsing
+│   │   ├── workflow_runner.py         #   🚀 Workflow execution engine
+│   │   ├── secret_scanner.py          #   🔐 Sensitive info detection
+│   │   └── workflow_share.py          #   🔗 Community sharing via PR
+│   └── references/                    #   Reference documents
 │       ├── workflow.md                #   Core 8-step loop
+│       ├── custom-workflows.md        #   Workflow format guide
 │       ├── platform-macos.md          #   macOS guidance
 │       ├── platform-windows.md        #   Windows guidance
 │       ├── platform-linux.md          #   Linux guidance
@@ -251,7 +306,7 @@ desktop-agent-ops/
 All commands below assume you are running from the repository root.
 
 <details>
-<summary><b>desktop_ops.py — 17 Desktop Operations</b></summary>
+<summary><b>desktop_ops.py — 18 Desktop Operations</b></summary>
 
 ```bash
 # Screenshot
@@ -275,6 +330,7 @@ $PY skill/scripts/desktop_ops.py mouse-position
 # Keyboard
 $PY skill/scripts/desktop_ops.py press --key KEY
 $PY skill/scripts/desktop_ops.py type --text "text to type"
+$PY skill/scripts/desktop_ops.py insert-newline [--count N]
 $PY skill/scripts/desktop_ops.py hotkey --keys cmd c
 
 # Screen Info
