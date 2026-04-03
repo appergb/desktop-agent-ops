@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.2.1 (2026-04-03)
+
+### Features
+
+- **Tool Priority Decision Flow** — SKILL.md entry point now enforces MCP/API-first
+  - Priority 1: MCP Servers (chrome-devtools, fetch, etc.)
+  - Priority 2: Native CLI / AppleScript
+  - Priority 3: Desktop Agent Ops (screen recognition as last resort)
+  - Decision checklist and scope exclusions added
+
+- **Three-Layer Smart Targeting** — Accessibility API → Vision OCR → Tesseract
+  - `ax_provider.py`: macOS AXUIElement, ~34ms, 100% accuracy
+  - `vision_ocr.py`: macOS Vision Framework, ~147ms, no Tesseract needed
+  - Auto-degradation for apps hiding UI (WeChat, QQ)
+
+### Changes
+
+- `target_resolver.py`: default providers now `accessibility,ocr_text,template_match,heuristic_region`
+- `ocr_text.py`: multi-backend with `--backend auto|vision|tesseract`
+- `first_run_setup.py`: macOS installs pyobjc; Tesseract optional on macOS
+- Hard Rule #1: "MCP/API first — never use screen recognition when a structured tool can do the job"
+
 ## v1.2.0 (2026-04-03)
 
 ### New Features

@@ -1,7 +1,7 @@
 ---
 name: desktop-agent-ops
 description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
-version: 1.2.0
+version: 1.2.1
 metadata:
   openclaw:
     requires:
