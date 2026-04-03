@@ -332,14 +332,42 @@ def stage_ocr_langs(state, force, system):
         "installed_individually": results,
     }
 
-PYTHON_DEPS = [
+PYTHON_DEPS_COMMON = [
     "pillow",
     "pyautogui",
     "pygetwindow",
-    "pytesseract",
     "opencv-python",
     "numpy",
 ]
+
+# macOS: pyobjc for Accessibility API + Vision OCR (replaces Tesseract as primary)
+PYTHON_DEPS_MACOS = [
+    "pyobjc-framework-ApplicationServices",
+    "pyobjc-framework-Vision",
+    "pyobjc-framework-Quartz",
+]
+
+# Tesseract is now optional (fallback on macOS, primary on Linux/Windows)
+PYTHON_DEPS_TESSERACT = [
+    "pytesseract",
+]
+
+
+def _build_python_deps(system):
+    """Build platform-specific dependency list."""
+    deps = list(PYTHON_DEPS_COMMON)
+    if system == "darwin":
+        deps.extend(PYTHON_DEPS_MACOS)
+        # Tesseract optional on macOS (Vision is primary)
+        deps.extend(PYTHON_DEPS_TESSERACT)
+    else:
+        # Windows/Linux: Tesseract is primary OCR
+        deps.extend(PYTHON_DEPS_TESSERACT)
+    return deps
+
+
+# Keep backward compat for any code referencing PYTHON_DEPS
+PYTHON_DEPS = PYTHON_DEPS_COMMON + PYTHON_DEPS_TESSERACT
 
 
 def stage_python_env(state, force, system):
@@ -370,8 +398,9 @@ def _setup_with_uv(uv, venv_dir, system):
     if not py.exists():
         return {"ok": False, "error": f"python not found at {py}", "tool": "uv"}
 
-    # Install deps
-    install = run_cmd([uv, "pip", "install", "--python", str(py), *PYTHON_DEPS], timeout=300)
+    # Install platform-specific deps
+    deps = _build_python_deps(system)
+    install = run_cmd([uv, "pip", "install", "--python", str(py), *deps], timeout=300)
     if not install["ok"]:
         return {"ok": False, "stage": "install_deps", "tool": "uv", **install}
 
@@ -380,7 +409,7 @@ def _setup_with_uv(uv, venv_dir, system):
         "tool": "uv",
         "venv": str(venv_dir),
         "python": str(py),
-        "deps": PYTHON_DEPS,
+        "deps": deps,
     }
 
 
@@ -395,8 +424,9 @@ def _setup_with_pip(venv_dir, system):
     if not py.exists():
         return {"ok": False, "error": f"python not found at {py}", "tool": "pip"}
 
-    # Install deps with pip
-    install = run_cmd([str(py), "-m", "pip", "install", "--quiet", *PYTHON_DEPS], timeout=300)
+    # Install platform-specific deps with pip
+    deps = _build_python_deps(system)
+    install = run_cmd([str(py), "-m", "pip", "install", "--quiet", *deps], timeout=300)
     if not install["ok"]:
         return {"ok": False, "stage": "install_deps", "tool": "pip", **install}
 
@@ -405,7 +435,7 @@ def _setup_with_pip(venv_dir, system):
         "tool": "pip",
         "venv": str(venv_dir),
         "python": str(py),
-        "deps": PYTHON_DEPS,
+        "deps": deps,
     }
 
 
