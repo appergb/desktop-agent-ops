@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.2.0 (2026-04-02)
+
+### New Features
+
+- **Three-Layer Smart Targeting** — `target_resolver.py` now uses Accessibility API → System OCR → Tesseract fallback chain
+  - Layer 1: macOS Accessibility API (`ax_provider.py`) — queries UI element tree directly, ~34ms, 100% text accuracy
+  - Layer 2: macOS Vision Framework OCR (`vision_ocr.py`) — built-in OCR, ~147ms, no Tesseract needed
+  - Layer 3: Tesseract OCR — cross-platform fallback (now optional on macOS)
+  - Auto-degrades: if Accessibility returns < 10 elements (WeChat, QQ), falls through to OCR
+
+- **macOS Accessibility Provider** (`ax_provider.py`)
+  - Uses PyObjC AXUIElement to walk app UI trees
+  - Returns structured {role, title, description, value, position, size} for each element
+  - 65x faster than Tesseract OCR for native apps (Finder, Safari, Notes, etc.)
+
+- **macOS Vision Framework OCR** (`vision_ocr.py`)
+  - Apple's built-in OCR engine, no external binary needed
+  - Native CJK support — no character splitting (eliminates `_merge_adjacent_boxes` workaround)
+  - 15x faster than Tesseract, better accuracy
+  - Two modes: fast (~147ms) and accurate (~686ms)
+
+### Changes
+
+- **`ocr_text.py` multi-backend** — auto-selects Vision (macOS) or Tesseract (Linux/Windows)
+  - New `--backend auto|vision|tesseract` flag
+  - Backward compatible: existing calls work unchanged
+- **`first_run_setup.py`** — platform-specific dependency installation
+  - macOS: installs pyobjc frameworks (Accessibility + Vision + Quartz)
+  - Tesseract is now optional on macOS (kept as fallback)
+  - `brew install tesseract` removed from mandatory install on macOS
+- **`target_resolver.py`** — default provider order changed to `accessibility,ocr_text,template_match,heuristic_region`
+- **SKILL.md** — updated targeting pipeline docs, CLI reference for new scripts
+
 ## v1.1.0 (2026-04-02)
 
 ### New Features

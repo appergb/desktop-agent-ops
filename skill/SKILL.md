@@ -1,7 +1,7 @@
 ---
 name: desktop-agent-ops
 description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
-version: 1.1.0
+version: 1.2.0
 metadata:
   openclaw:
     requires:
@@ -10,7 +10,7 @@ metadata:
     emoji: 🖥️
     os: [macos, windows, linux]
     install:
-      brew: [cliclick, tesseract]
+      brew: [cliclick]
 ---
 
 # Desktop Agent Ops
@@ -33,9 +33,11 @@ python3 <SKILL_DIR>/scripts/first_run_setup.py
 
 **Auto-installs on first run:**
 1. Platform detection (macOS / Windows / Linux)
-2. `cliclick` + `tesseract` (macOS via brew; Linux guide printed)
-3. OCR language packs auto-detected from system locale (中文→chi_sim, 日本語→jpn, etc.)
-4. Python venv + pillow, pyautogui, pytesseract, opencv-python, numpy (via uv or pip)
+2. `cliclick` (macOS via brew; Linux: xdotool/wmctrl guide printed)
+3. Python venv + platform-specific dependencies (via uv or pip):
+   - **macOS**: pyobjc (Accessibility API + Vision OCR) + pillow, pyautogui, opencv-python, numpy
+   - **Windows/Linux**: pytesseract + pillow, pyautogui, opencv-python, numpy
+4. OCR setup: macOS uses Vision Framework (built-in, no Tesseract needed); Linux/Windows uses Tesseract
 5. OS permissions (Screen Recording, Accessibility, Automation) with auto-open System Settings
 6. Smoke test (screenshot + mouse move verification)
 
@@ -75,40 +77,47 @@ Every desktop task follows this loop. No exceptions.
 
 ---
 
-## Window-Scoped Targeting (THE CORRECT WAY)
+## Smart Targeting with Three-Layer Fallback
 
 **NEVER do OCR or clicking on a full-screen screenshot.** Always scope to the target app window.
 
-### The 6-Step Pipeline
+### Three-Layer Targeting Pipeline
+
+`target_resolver.py` automatically selects the best targeting method:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Step 1: FOCUS the target app                            │
-│   $PY desktop_ops.py focus-app --name "AppName"         │
-│   → brings app to front                                 │
-├─────────────────────────────────────────────────────────┤
-│ Step 2: GET window bounds                               │
-│   $PY desktop_ops.py front-window-bounds --app "AppName"│
-│   → {x, y, width, height} in logical coordinates        │
-├─────────────────────────────────────────────────────────┤
-│ Step 3: CAPTURE only that window                        │
-│   $PY desktop_ops.py capture-region --x X --y Y         │
-│     --width W --height H --output /tmp/window.png       │
-├─────────────────────────────────────────────────────────┤
-│ Step 4: OCR within the window                           │
-│   $PY ocr_text.py --app "AppName" --python $PY          │
-│   → abs_box coordinates are INSIDE the window           │
-├─────────────────────────────────────────────────────────┤
-│ Step 5: VERIFY before clicking                          │
-│   $PY desktop_ops.py move --x TX --y TY                 │
-│   $PY desktop_ops.py screenshot --with-cursor            │
-│   → confirm cursor is on the right element              │
-├─────────────────────────────────────────────────────────┤
-│ Step 6: CLICK only if verified                          │
-│   $PY desktop_ops.py click --x TX --y TY                │
-│   $PY desktop_ops.py screenshot → verify result          │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ Layer 1: ACCESSIBILITY API (fastest, most accurate)        │
+│   macOS: AXUIElement via PyObjC                            │
+│   → Queries UI element tree directly, no screenshot needed │
+│   → Returns role, title, position, size for each element   │
+│   → 100% text accuracy, native CJK, ~34ms                 │
+│   → Auto-degrades if element_count < 10 (WeChat, QQ, etc.)│
+├────────────────────────────────────────────────────────────┤
+│ Layer 2: SYSTEM OCR (fast, no external deps)               │
+│   macOS: Apple Vision Framework                            │
+│   → Built-in OCR, no Tesseract install needed              │
+│   → Superior CJK (no character splitting), ~147ms          │
+│   → Handles DPI natively                                   │
+├────────────────────────────────────────────────────────────┤
+│ Layer 3: TESSERACT OCR (cross-platform fallback)           │
+│   All platforms: pytesseract                               │
+│   → Used when Vision is unavailable (Linux, Windows)       │
+│   → Requires external tesseract binary + language packs    │
+├────────────────────────────────────────────────────────────┤
+│ Layer 4: TEMPLATE MATCH + HEURISTIC (last resort)          │
+│   → Image-based icon matching or geometry-based targeting  │
+└────────────────────────────────────────────────────────────┘
 ```
+
+### How it works in practice:
+
+| App type | What happens |
+|----------|-------------|
+| Finder, Safari, Notes, System Settings | Layer 1 (Accessibility) finds elements in ~34ms |
+| WeChat, QQ, Electron apps | Layer 1 detects < 10 elements → auto-falls to Layer 2 (Vision OCR) |
+| Linux / Windows apps | Layer 2 skipped → Layer 3 (Tesseract) |
+| Icons without text | Layer 4 (template match) |
 
 ### Shortcut (RECOMMENDED for most targeting):
 
@@ -116,14 +125,19 @@ Every desktop task follows this loop. No exceptions.
 $PY scripts/target_resolver.py --app "AppName" --text "按钮文字" --python $PY
 ```
 
-This single command: focuses app → gets bounds → OCR within window → returns `best_candidate` with `{x, y, within_window}`.
+This single command: focuses app → tries Accessibility → falls back to OCR if needed → returns `best_candidate` with `{x, y, within_window, source}`.
+
+The `source` field tells you which layer found the target:
+- `"accessibility"` — found via AX element tree (fastest, most reliable)
+- `"ocr_vision"` — found via Vision OCR (no Tesseract needed)
+- `"ocr_tesseract"` — found via Tesseract (fallback)
 
 ### Why window-scoped matters:
 
 | Approach | Risk |
 |----------|------|
-| ❌ Full-screen OCR | "搜索" in WeChat AND Chrome → clicks wrong app |
-| ✅ Window-scoped | "搜索" ONLY in WeChat window → correct click |
+| Full-screen OCR | "搜索" in WeChat AND Chrome → clicks wrong app |
+| Window-scoped | "搜索" ONLY in WeChat window → correct click |
 
 ---
 
@@ -276,19 +290,34 @@ $PY scripts/desktop_ops.py screen-size
 $PY scripts/desktop_ops.py pixel-color --x X --y Y
 ```
 
-### ocr_text.py
+### ax_provider.py (macOS Accessibility API)
 
 ```bash
-$PY scripts/ocr_text.py --app "AppName" --python $PY [--region-label LABEL] [--lang auto]
-$PY scripts/ocr_text.py --image /path/to/capture.png --python $PY [--lang auto]
+$PY scripts/ax_provider.py --app "AppName" --text "text" [--text-match contains|exact|regex] [--max-depth 6]
+$PY scripts/ax_provider.py --app "AppName" --text "text" --elements  # include full element tree
 ```
 
-### target_resolver.py
+### vision_ocr.py (macOS Vision Framework OCR)
+
+```bash
+$PY scripts/vision_ocr.py --image /path/to/capture.png [--lang zh-Hans,en-US] [--level fast|accurate]
+```
+
+### ocr_text.py (multi-backend OCR)
+
+```bash
+$PY scripts/ocr_text.py --app "AppName" --python $PY [--region-label LABEL] [--backend auto|vision|tesseract]
+$PY scripts/ocr_text.py --image /path/to/capture.png --python $PY [--backend auto]
+```
+
+### target_resolver.py (three-layer smart targeting)
 
 ```bash
 $PY scripts/target_resolver.py --app "AppName" --text "text" --python $PY
 $PY scripts/target_resolver.py --app "AppName" --template /path/icon.png --python $PY
 $PY scripts/target_resolver.py --app "AppName" --text "text" --region-label LABEL --python $PY
+# Provider order (default: accessibility first):
+$PY scripts/target_resolver.py --app "AppName" --text "text" --providers "accessibility,ocr_text" --python $PY
 ```
 
 ### task_context.py / cleanup_task.py

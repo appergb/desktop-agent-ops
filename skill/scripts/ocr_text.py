@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+"""
+ocr_text.py — Multi-backend OCR with automatic fallback.
+
+Backend priority:
+  macOS:   Vision Framework → Tesseract
+  Windows: Tesseract (WinRT OCR reserved for future)
+  Linux:   Tesseract
+
+Usage:
+    $PY ocr_text.py --app "AppName" --python $PY [--region-label LABEL] [--backend auto]
+    $PY ocr_text.py --image /path/to/capture.png --python $PY [--backend vision]
+"""
 import argparse
 import json
 import os
@@ -34,20 +46,68 @@ def run_json(cmd):
     return json.loads(p.stdout)
 
 
-def ensure_ocr_ready():
-    if Image is None:
-        return "PIL_unavailable"
-    if shutil.which("tesseract") is None:
-        return "tesseract_binary_missing"
-    try:
-        import pytesseract  # type: ignore
-        return None
-    except Exception:
-        return "pytesseract_unavailable"
+# ─────────────────────────────────────────────
+# Backend availability checks
+# ─────────────────────────────────────────────
 
+def _vision_available():
+    """Check if macOS Vision Framework is available."""
+    if platform.system().lower() != "darwin":
+        return False
+    try:
+        import Vision  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _tesseract_available():
+    """Check if Tesseract OCR is available."""
+    if Image is None:
+        return False
+    if shutil.which("tesseract") is None:
+        return False
+    try:
+        import pytesseract  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def choose_backend(requested):
+    """Choose the best available backend.
+
+    Returns (backend_name, error_or_None).
+    """
+    system = platform.system().lower()
+
+    if requested == "vision":
+        if _vision_available():
+            return "vision", None
+        return None, "vision_unavailable"
+
+    if requested == "tesseract":
+        if _tesseract_available():
+            return "tesseract", None
+        return None, "tesseract_unavailable"
+
+    # auto: try Vision first on macOS, then Tesseract
+    if system == "darwin" and _vision_available():
+        return "vision", None
+    if _tesseract_available():
+        return "tesseract", None
+
+    # Nothing available
+    if system == "darwin":
+        return None, "no_ocr_backend: install pyobjc-framework-Vision (pip) or tesseract (brew)"
+    return None, "no_ocr_backend: install tesseract"
+
+
+# ─────────────────────────────────────────────
+# Tesseract backend (original implementation)
+# ─────────────────────────────────────────────
 
 def _get_installed_tess_langs():
-    """Get set of installed tesseract language codes."""
     try:
         p = subprocess.run(["tesseract", "--list-langs"],
                            capture_output=True, text=True, timeout=5)
@@ -62,16 +122,9 @@ def _get_installed_tess_langs():
         return set()
 
 
-def auto_detect_lang():
-    """Build a tesseract --lang string based on system locale + installed packs.
-
-    Always includes 'eng'. Adds the system locale language if its pack is installed.
-    Returns e.g. 'eng+chi_sim' or just 'eng'.
-    """
+def auto_detect_tess_lang():
     installed = _get_installed_tess_langs()
     parts = ["eng"]
-
-    # Detect system locale
     system = platform.system().lower()
     locale_langs = []
     _UNDERSCORE_LOCALE = {
@@ -88,8 +141,8 @@ def auto_detect_lang():
             pass
     elif system == "windows":
         try:
-            import locale
-            def_locale = locale.getdefaultlocale()
+            import locale as _locale
+            def_locale = _locale.getlocale()
             if def_locale and def_locale[0]:
                 locale_langs.append(def_locale[0])
         except Exception:
@@ -109,28 +162,75 @@ def auto_detect_lang():
             if lang.startswith(prefix) and tess_code in installed and tess_code not in parts:
                 parts.append(tess_code)
                 break
-
     return "+".join(parts)
 
 
+def extract_text_tesseract(image_path, min_conf, lang):
+    import pytesseract  # type: ignore
+    image = Image.open(image_path)
+    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang=lang)
+    boxes = []
+    for i in range(len(data.get("text", []))):
+        text = (data["text"][i] or "").strip()
+        conf_raw = data.get("conf", ["-1"])[i]
+        try:
+            conf = float(conf_raw)
+        except Exception:
+            conf = -1.0
+        if not text or conf < min_conf:
+            continue
+        x = int(data["left"][i])
+        y = int(data["top"][i])
+        w = int(data["width"][i])
+        h = int(data["height"][i])
+        boxes.append({
+            "text": text, "confidence": conf,
+            "box": {"x": x, "y": y, "width": w, "height": h},
+        })
+    return boxes
+
+
+# ─────────────────────────────────────────────
+# Vision backend
+# ─────────────────────────────────────────────
+
+def extract_text_vision(image_path, min_conf, lang_str):
+    """Run Vision OCR. Returns boxes in same format as Tesseract backend."""
+    from vision_ocr import ocr_image, auto_detect_vision_langs
+
+    if lang_str and lang_str != "auto":
+        languages = [l.strip() for l in lang_str.split(",")]
+    else:
+        languages = auto_detect_vision_langs()
+
+    # Use fast mode for interactive targeting (147ms vs 700ms)
+    boxes_raw, err = ocr_image(image_path, languages, level="fast", dpi_scale=1.0)
+    if err:
+        return []
+
+    boxes = []
+    for b in boxes_raw:
+        if b["confidence"] < min_conf:
+            continue
+        boxes.append({
+            "text": b["text"],
+            "confidence": b["confidence"],
+            "box": b["pixel_box"],  # pixel coords for consistency
+        })
+    return boxes
+
+
+# ─────────────────────────────────────────────
+# DPI detection
+# ─────────────────────────────────────────────
+
 def _detect_dpi_scale(python_exec):
-    """Detect the DPI scale factor between screenshot pixels and logical coordinates.
-
-    On Retina/HiDPI displays, screencapture produces images at 2x (or 3x) the
-    logical resolution. OCR coordinates are in pixel space but mouse operations
-    use logical space, so we need this ratio to convert.
-
-    Returns the scale factor (e.g. 2.0 for Retina, 1.0 for non-Retina).
-    """
     try:
         desktop_ops = ROOT / "desktop_ops.py"
-        # Get logical screen size
         screen = run_json([python_exec, str(desktop_ops), "screen-size"])
         logical_w = screen.get("width", 0)
         if logical_w <= 0:
             return 1.0
-
-        # Take a tiny screenshot and check its pixel width
         tmp = tempfile.mktemp(prefix="dpi-probe-", suffix=".png")
         run_json([python_exec, str(desktop_ops), "screenshot", "--output", tmp])
         img = Image.open(tmp)
@@ -139,15 +239,17 @@ def _detect_dpi_scale(python_exec):
             Path(tmp).unlink(missing_ok=True)
         except Exception:
             pass
-
         if pixel_w > 0 and logical_w > 0:
             ratio = pixel_w / logical_w
-            # Round to nearest 0.5 (common values: 1.0, 1.5, 2.0, 3.0)
             return round(ratio * 2) / 2
     except Exception:
         pass
     return 1.0
 
+
+# ─────────────────────────────────────────────
+# Region capture (shared by both backends)
+# ─────────────────────────────────────────────
 
 def capture_region(app, region_label, python_exec):
     desktop_ops = ROOT / "desktop_ops.py"
@@ -166,55 +268,26 @@ def capture_region(app, region_label, python_exec):
         region = region_out["region"]["absolute"]
     else:
         region = {
-            "x": bounds["x"],
-            "y": bounds["y"],
-            "width": bounds["width"],
-            "height": bounds["height"],
+            "x": bounds["x"], "y": bounds["y"],
+            "width": bounds["width"], "height": bounds["height"],
         }
 
     output = tempfile.mktemp(prefix="ocr-region-", suffix=".png")
     cap = run_json([
         python_exec, str(desktop_ops), "capture-region",
-        "--x", str(region["x"]),
-        "--y", str(region["y"]),
-        "--width", str(region["width"]),
-        "--height", str(region["height"]),
+        "--x", str(region["x"]), "--y", str(region["y"]),
+        "--width", str(region["width"]), "--height", str(region["height"]),
         "--output", output,
     ])
     return {
-        "bounds": bounds,
-        "region": region,
-        "capture": cap,
-        "image": output,
+        "bounds": bounds, "region": region,
+        "capture": cap, "image": output,
     }
 
 
-def extract_text(image_path, min_conf, lang):
-    import pytesseract  # type: ignore
-
-    image = Image.open(image_path)
-    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang=lang)
-    boxes = []
-    for i in range(len(data.get("text", []))):
-        text = (data["text"][i] or "").strip()
-        conf_raw = data.get("conf", ["-1"])[i]
-        try:
-            conf = float(conf_raw)
-        except Exception:
-            conf = -1.0
-        if not text or conf < min_conf:
-            continue
-        x = int(data["left"][i])
-        y = int(data["top"][i])
-        w = int(data["width"][i])
-        h = int(data["height"][i])
-        boxes.append({
-            "text": text,
-            "confidence": conf,
-            "box": {"x": x, "y": y, "width": w, "height": h},
-        })
-    return boxes
-
+# ─────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────
 
 def main():
     ap = argparse.ArgumentParser()
@@ -224,25 +297,31 @@ def main():
     ap.add_argument("--python", default="python3")
     ap.add_argument("--min-conf", type=float, default=40.0)
     ap.add_argument("--lang", default="auto",
-                     help="Tesseract lang code (e.g. eng, chi_sim, eng+chi_sim). "
-                          "Default 'auto' detects from system locale.")
+                     help="Language code. For Tesseract: eng+chi_sim. "
+                          "For Vision: zh-Hans,en-US. 'auto' = detect.")
+    ap.add_argument("--backend", choices=["auto", "vision", "tesseract"],
+                     default="auto",
+                     help="OCR backend. 'auto' = Vision on macOS, Tesseract elsewhere.")
     args = ap.parse_args()
 
-    err = ensure_ocr_ready()
-    if err:
-        jprint({"ok": False, "error": err})
+    # Choose backend
+    backend, backend_err = choose_backend(args.backend)
+    if backend_err:
+        jprint({"ok": False, "error": backend_err})
         return
 
     # Resolve language
     lang = args.lang
-    if lang == "auto":
-        lang = auto_detect_lang()
+    if backend == "tesseract" and lang == "auto":
+        lang = auto_detect_tess_lang()
 
+    # Source: image file or app window capture
     source = {"type": "image", "image": args.image}
     capture = None
     region = None
     bounds = None
     image_path = args.image
+
     if not image_path:
         if not args.app:
             jprint({"ok": False, "error": "image_or_app_required"})
@@ -251,15 +330,19 @@ def main():
         image_path = capture["image"]
         region = capture["region"]
         bounds = capture["bounds"]
-        source = {"type": "capture", "app": args.app, "region_label": args.region_label, "image": image_path}
+        source = {"type": "capture", "app": args.app,
+                  "region_label": args.region_label, "image": image_path}
 
-    boxes = extract_text(image_path, args.min_conf, lang)
+    # Run OCR with chosen backend
+    if backend == "vision":
+        boxes = extract_text_vision(image_path, args.min_conf, lang)
+    else:
+        boxes = extract_text_tesseract(image_path, args.min_conf, lang)
 
-    # Detect DPI scale to convert pixel coordinates → logical coordinates
+    # DPI scale for coordinate conversion
     dpi_scale = _detect_dpi_scale(args.python)
 
     def scale_box(b):
-        """Convert a pixel-space box to logical coordinates."""
         return {
             "x": int(b["x"] / dpi_scale),
             "y": int(b["y"] / dpi_scale),
@@ -302,6 +385,7 @@ def main():
 
     jprint({
         "ok": True,
+        "backend": backend,
         "source": source,
         "lang": lang,
         "dpi_scale": dpi_scale,
