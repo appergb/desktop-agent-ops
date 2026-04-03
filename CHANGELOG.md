@@ -1,8 +1,15 @@
 # Changelog
 
-## v1.2.0 (2026-04-02)
+## v1.2.0 (2026-04-03)
 
 ### New Features
+
+- **Tool Priority System** — SKILL.md now enforces MCP/API-first decision flow
+  - Priority 1: MCP Servers (chrome-devtools, fetch, etc.) — always prefer structured APIs
+  - Priority 2: Native CLI / AppleScript — direct control without screen parsing
+  - Priority 3: Desktop Agent Ops — only when no structured tool can do the job
+  - Decision checklist added to skill entry point
+  - Hard Rule #1 updated: "MCP/API first: never use screen recognition when a structured tool can do the job"
 
 - **Three-Layer Smart Targeting** — `target_resolver.py` now uses Accessibility API → System OCR → Tesseract fallback chain
   - Layer 1: macOS Accessibility API (`ax_provider.py`) — queries UI element tree directly, ~34ms, 100% text accuracy
