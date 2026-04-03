@@ -1,6 +1,14 @@
 # Collaboration Rules
 
-Collaboration is optional and should be rare in the MVP.
+## Tool Priority (MUST follow before any desktop automation)
+
+Before using Desktop Agent Ops for screen recognition, the agent MUST check whether a higher-level tool can accomplish the task:
+
+1. **MCP Servers** — If an MCP server controls the target (e.g., `chrome-devtools` for browsers, `fetch` for HTTP, `memory` for knowledge), use it. MCP is faster, more reliable, and does not require screenshots or OCR.
+2. **Native CLI / AppleScript** — If the app is scriptable (e.g., `osascript`, `defaults`, shell commands), use that.
+3. **Desktop Agent Ops** — Use ONLY when no structured API exists for the target app (e.g., WeChat, QQ, native GUI-only software).
+
+> **Rule: Never use screen OCR to do what a structured API can do.**
 
 ## Default
 

@@ -19,6 +19,58 @@ Use this skill as a **main-agent operating manual** for desktop GUI tasks.
 
 ---
 
+## IMPORTANT: Tool Priority — When to Use This Skill
+
+**This skill is NOT the first choice.** Before using desktop screen recognition, always try higher-level tools first:
+
+### Priority order (MUST follow):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Priority 1: MCP Servers & Structured APIs                          │
+│   If an MCP server can control the target app → USE IT FIRST       │
+│   Examples:                                                         │
+│   - Browser automation → use chrome-devtools MCP (navigate, click,  │
+│     fill, screenshot via CDP)                                       │
+│   - File operations → use filesystem tools directly                 │
+│   - Database queries → use database MCP                             │
+│   - Slack/GitHub/Notion → use their respective MCP servers          │
+│   WHY: Structured APIs are faster, more reliable, no OCR needed     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Priority 2: Native CLI / AppleScript / OS APIs                      │
+│   If the app has a CLI or scriptable interface → USE IT             │
+│   Examples:                                                         │
+│   - `open -a "App"` to launch apps                                  │
+│   - `osascript` for AppleScript-automatable apps                    │
+│   - `defaults` for system settings                                  │
+│   WHY: Direct control, no screen parsing needed                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Priority 3: Desktop Agent Ops (THIS SKILL)                          │
+│   Use ONLY when:                                                    │
+│   - No MCP server exists for the target app                         │
+│   - The app has no CLI or scriptable API                            │
+│   - The task requires visual GUI interaction that cannot be done     │
+│     through any structured interface                                │
+│   Examples:                                                         │
+│   - WeChat desktop (no API, no MCP)                                 │
+│   - Native desktop apps with no automation support                  │
+│   - Any app where you must "see the screen and click"               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Decision checklist before using this skill:
+
+1. **Is there an MCP server** for this app? (check available MCP tools) → If yes, use MCP
+2. **Does the app have a CLI** or API? → If yes, use that
+3. **Can AppleScript/osascript control it?** → If yes, use that
+4. **None of the above work?** → Use this skill (Desktop Agent Ops)
+
+> **Rule: Never use screen OCR to do what a structured API can do.**
+> Opening a URL in Chrome via `chrome-devtools MCP navigate` is always better than
+> OCR-finding the address bar and typing into it.
+
+---
+
 ## MANDATORY: Auto-setup gate (FIRST ACTION, every time)
 
 ```bash
@@ -443,23 +495,36 @@ Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `conte
 
 ## Scope
 
-Use this skill for: chat apps, browsers, file managers, editors, office apps, system settings, any closed desktop software with no usable API.
+**Use this skill ONLY when no structured API (MCP, CLI, AppleScript) can accomplish the task.**
+
+Typical use cases:
+- Chat apps with no API (WeChat, QQ, Telegram desktop)
+- Native desktop apps with no automation support
+- System Settings / Preferences navigation
+- Any closed desktop software where you must "see and click"
+
+**Do NOT use this skill for:**
+- Browser automation → use `chrome-devtools` MCP instead
+- File operations → use filesystem tools directly
+- Apps with MCP servers → use MCP
+- Tasks achievable via CLI or AppleScript
 
 ## Hard Rules
 
-1. **Always run auto-setup gate first**
-2. **Always use EXACT parameter names from CLI reference — never guess**
-3. **Always scope OCR to the target app window — NEVER full-screen OCR**
-4. **Always: focus-app → front-window-bounds → OCR within window → verify → act**
-5. **Always pass `--python $PY` to ocr_text.py and target_resolver.py**
-6. **Always verify coordinates are within window bounds before clicking**
-7. **Always re-get window bounds after any UI state change (login, dialog, navigation)**
-8. **Use `insert-newline` for line breaks; never use `\n` in `type --text`**
-9. **For send actions: prefer visible send button; use `press --key return` only when verified**
-10. **One action at a time; verify after each**
-11. **Maximum 3 retries per action; each retry must recapture fresh state**
-12. **Cleanup is mandatory at task end**
-13. **If verification fails, recapture and rebuild — do not retry blindly**
+1. **MCP/API first: never use screen recognition when a structured tool can do the job**
+2. **Always run auto-setup gate first**
+3. **Always use EXACT parameter names from CLI reference — never guess**
+4. **Always scope targeting to the target app window — NEVER full-screen**
+5. **Always: focus-app → front-window-bounds → target (AX or OCR) → verify → act**
+6. **Always pass `--python $PY` to ocr_text.py and target_resolver.py**
+7. **Always verify coordinates are within window bounds before clicking**
+8. **Always re-get window bounds after any UI state change (login, dialog, navigation)**
+9. **Use `insert-newline` for line breaks; never use `\n` in `type --text`**
+10. **For send actions: prefer visible send button; use `press --key return` only when verified**
+11. **One action at a time; verify after each**
+12. **Maximum 3 retries per action; each retry must recapture fresh state**
+13. **Cleanup is mandatory at task end**
+14. **If verification fails, recapture and rebuild — do not retry blindly**
 
 ---
 
