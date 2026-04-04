@@ -28,35 +28,36 @@ def run(cmd):
     }
 
 
-report = {
-    'platform': platform.system().lower(),
-    'python': PY,
-    'deps': {
-        'pyautogui': run([PY, '-c', 'import pyautogui; print("ok")'])['ok'],
-        'PIL': run([PY, '-c', 'from PIL import Image; print("ok")'])['ok'],
-        'pytesseract': run([PY, '-c', 'import pytesseract; print("ok")'])['ok'],
-        'cv2': run([PY, '-c', 'import cv2; print("ok")'])['ok'],
-        'tesseract_bin': shutil.which('tesseract') is not None,
-    },
-    'permissions': {
-        'state_file': str(PERMISSION_STATE),
-        'completed': False,
-    },
-    'checks': {}
-}
+if __name__ == "__main__":
+    report = {
+        'platform': platform.system().lower(),
+        'python': PY,
+        'deps': {
+            'pyautogui': run([PY, '-c', 'import pyautogui; print("ok")'])['ok'],
+            'PIL': run([PY, '-c', 'from PIL import Image; print("ok")'])['ok'],
+            'pytesseract': run([PY, '-c', 'import pytesseract; print("ok")'])['ok'],
+            'cv2': run([PY, '-c', 'import cv2; print("ok")'])['ok'],
+            'tesseract_bin': shutil.which('tesseract') is not None,
+        },
+        'permissions': {
+            'state_file': str(PERMISSION_STATE),
+            'completed': False,
+        },
+        'checks': {}
+    }
 
-try:
-    if PERMISSION_STATE.exists():
-        state = json.loads(PERMISSION_STATE.read_text())
-        report['permissions']['completed'] = bool(state.get('completed'))
-        report['permissions']['state'] = state
-except Exception:
-    report['permissions']['error'] = 'permission_state_read_failed'
+    try:
+        if PERMISSION_STATE.exists():
+            state = json.loads(PERMISSION_STATE.read_text())
+            report['permissions']['completed'] = bool(state.get('completed'))
+            report['permissions']['state'] = state
+    except Exception:
+        report['permissions']['error'] = 'permission_state_read_failed'
 
-report['checks']['frontmost'] = run([PY, str(DESKTOP_OPS), 'frontmost'])
-report['checks']['screenshot'] = run([PY, str(DESKTOP_OPS), 'screenshot'])
-report['checks']['mouse_position_before'] = run([PY, str(DESKTOP_OPS), 'mouse-position'])
-report['checks']['move'] = run([PY, str(DESKTOP_OPS), 'move', '--x', '400', '--y', '400', '--duration', '0.1'])
-report['checks']['mouse_position_after'] = run([PY, str(DESKTOP_OPS), 'mouse-position'])
+    report['checks']['frontmost'] = run([PY, str(DESKTOP_OPS), 'frontmost'])
+    report['checks']['screenshot'] = run([PY, str(DESKTOP_OPS), 'screenshot'])
+    report['checks']['mouse_position_before'] = run([PY, str(DESKTOP_OPS), 'mouse-position'])
+    report['checks']['move'] = run([PY, str(DESKTOP_OPS), 'move', '--x', '400', '--y', '400', '--duration', '0.1'])
+    report['checks']['mouse_position_after'] = run([PY, str(DESKTOP_OPS), 'mouse-position'])
 
-print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(json.dumps(report, ensure_ascii=False, indent=2))

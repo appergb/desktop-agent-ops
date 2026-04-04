@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.2 (2026-04-04)
+
+### Bug Fixes
+
+- **`doctor.py`**: wrapped top-level execution in `if __name__ == "__main__"` guard — importing
+  the module no longer triggers live system checks (screenshot, mouse move, subprocess calls)
+- **`platform_probe.py`**: same guard added — importing no longer executes platform detection
+  and prints JSON as a side effect
+- **`SKILL.md` CLI Reference**: documented three previously undocumented scripts:
+  - `platform_probe.py` — platform detection, returns `{ok, platform, linux_session}`
+  - `target_report.py` — region candidate points, called internally by `target_resolver.py`
+    and `click_and_verify.py`
+  - `doctor.py` — health diagnostics for post-setup failures
+
 ## v1.2.1 (2026-04-03)
 
 ### Features

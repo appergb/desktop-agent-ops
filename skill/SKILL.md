@@ -1,7 +1,7 @@
 ---
 name: desktop-agent-ops
 description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
-version: 1.2.1
+version: 1.2.2
 metadata:
   openclaw:
     requires:
@@ -379,6 +379,35 @@ $PY scripts/task_context.py init --task-id "my-task"   # aliases: create, --name
 $PY scripts/task_context.py show --task-id "my-task"
 $PY scripts/cleanup_task.py --task-id "my-task"
 ```
+
+### platform_probe.py (platform detection)
+
+```bash
+$PY scripts/platform_probe.py
+```
+
+Returns `{"ok": true, "platform": "darwin"|"windows"|"linux", "linux_session": "x11"|"wayland"|null}`.
+Run before any platform-conditional logic.
+
+### target_report.py (region candidate points)
+
+```bash
+$PY scripts/target_report.py --app "AppName" --label LABEL --python $PY
+```
+
+Returns `{ok, window, region, mouse, candidates[]}` — a list of candidate click coordinates
+(center, upper_middle, lower_middle, left_middle, right_middle) for the named region.
+Used internally by `target_resolver.py` and `click_and_verify.py`.
+
+### doctor.py (health diagnostics)
+
+```bash
+$PY scripts/doctor.py
+```
+
+Checks deps (pyautogui, PIL, pytesseract, cv2, tesseract binary), permission state,
+and runs live smoke checks (frontmost, screenshot, mouse move).
+Run when `first_run_setup.py` smoke test fails.
 
 ### window_regions.py
 
