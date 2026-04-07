@@ -7,7 +7,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PY = os.environ.get("DESKTOP_AGENT_OPS_PYTHON", "python3")
+
+from resolve_python import resolve_python
+PY = resolve_python()
 
 
 def run_json(cmd):
@@ -40,10 +42,18 @@ def main():
     except Exception as exc:
         print(json.dumps({"ok": False, "error": f"target_report_failed:{exc}"}))
         return
-    candidate = report["candidates"][args.candidate_index]
 
-    pre = tempfile.mktemp(prefix="click-pre-", suffix=".png")
-    post = tempfile.mktemp(prefix="click-post-", suffix=".png")
+    candidates = report.get("candidates", [])
+    if args.candidate_index >= len(candidates):
+        print(json.dumps({"ok": False, "error": f"candidate_index_out_of_range: {args.candidate_index} >= {len(candidates)}"}))
+        return
+    candidate = candidates[args.candidate_index]
+
+    import os as _os
+    fd_pre, pre = tempfile.mkstemp(prefix="click-pre-", suffix=".png")
+    _os.close(fd_pre)
+    fd_post, post = tempfile.mkstemp(prefix="click-post-", suffix=".png")
+    _os.close(fd_post)
 
     try:
         move = run_json([PY, str(desktop_ops), "move", "--x", str(candidate["x"]), "--y", str(candidate["y"])])
@@ -114,6 +124,13 @@ def main():
         "diff": diff_out,
     }
     print(json.dumps(out, ensure_ascii=False))
+
+    # Clean up temp files
+    for f in [pre, post]:
+        try:
+            Path(f).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

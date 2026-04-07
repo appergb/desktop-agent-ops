@@ -64,38 +64,42 @@ Examples:
 - type into one field
 - press one hotkey
 - capture a smaller region
-- resolve a target using OCR or templates when labels are visible
+- resolve a target using AX, OCR, or templates when labels are visible
 
-When target location is uncertain, read `references/coordinate-reconstruction.md` before clicking.
+**CRITICAL: Get click coordinates from accessibility/OCR, not from visual estimation.**
+
+Models often confuse left/right or misjudge pixel distances when looking at screenshots.
+ALWAYS use `accessibility_provider.py` or `target_resolver.py` to get exact pixel coordinates.
+NEVER guess or estimate a click position by looking at a screenshot.
 
 Avoid long preplanned action chains.
 
-### 5. Execute through helper script
+### 5. Execute through helper script — MANDATORY move→readback→click
+
+**Before every click, follow this exact sequence:**
+
+```
+1. accessibility/OCR → get target {x, y} (NEVER estimate from screenshot)
+2. front-window-bounds → get {wx, wy, ww, wh}
+3. bounds-check: assert wx ≤ x ≤ wx+ww AND wy ≤ y ≤ wy+wh
+4. move --x X --y Y (DO NOT CLICK)
+5. mouse-position → read back {mx, my}
+6. verify: |mx - x| ≤ 5 AND |my - y| ≤ 5  (if not → STOP)
+7. click --x X --y Y
+```
+
+For destructive actions (send, delete, close, confirm), add between step 4 and 7:
+```
+screenshot --with-cursor → visually confirm cursor is over correct element
+```
 
 Actions should return JSON that the main agent can read back into context.
-
-Expected result fields may include:
-
-- `ok`
-- `action`
-- `output` or `post_capture`
-- `frontmost_app`
-- `x`, `y`
-- `error`
 
 ### 6. Verify immediately
 
 After every meaningful action, capture again and check whether expected state changed.
 
-For click-sensitive desktop work, use this stricter sequence:
-
-1. focus target app
-2. capture state
-3. estimate target point
-4. move to target point
-5. read back live mouse position
-6. only click if the live position matches the intended point closely
-7. capture again and verify UI change
+**In multi-step tasks: re-locate targets before EVERY click.** Coordinates from step N are stale by step N+1. Windows move, dialogs appear, UI shifts after typing.
 
 Examples:
 

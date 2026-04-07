@@ -1,16 +1,27 @@
 # Coordinate Reconstruction
 
-Use this file when the agent must decide **where** to click from screenshot evidence instead of relying on fixed guesses.
+Use this file when accessibility and OCR are both unavailable and you must reconstruct a click target from other evidence.
+
+## IMPORTANT: accessibility/OCR is always preferred
+
+Before using coordinate reconstruction, try these first:
+1. `accessibility_provider.py --app "AppName" --text "target"` → exact pixel coordinates
+2. `target_resolver.py --app "AppName" --text "target"` → auto-fallback pipeline
+3. `ocr_text.py --app "AppName"` → all text positions in window
+
+**Only use this file’s techniques when all three return no results.**
+
+**NEVER visually estimate click positions from screenshots.** Models confuse left/right and misjudge pixel distances. This is the #1 cause of click errors.
 
 ## Goal
 
-Reconstruct a reliable click target from:
+Reconstruct a reliable click target from programmatic evidence:
 
-- full-screen screenshots
-- region screenshots
-- screen size
-- live mouse coordinates
-- pixel samples at candidate points
+- screen size values
+- window bounds (from `front-window-bounds`)
+- live mouse coordinates (from `mouse-position`)
+- pixel color samples (from `pixel-color`)
+- region geometry calculations
 
 ## Principle
 
@@ -18,16 +29,13 @@ Do not trust a guessed absolute coordinate until you verify it.
 
 Preferred loop:
 
-1. get current screen size
-2. capture full screen
-3. identify a candidate UI region visually
-4. narrow to a region capture if needed
-5. estimate a target point inside the region
-6. optionally sample the pixel color at that point
-7. move to the target point
-8. read back the real mouse position
-9. click only if the pointer landed where expected
-10. capture again and verify UI change
+1. get window bounds from `front-window-bounds`
+2. calculate target region geometrically (e.g., center of window, 90% down for input area)
+3. sample the pixel color at the candidate point to check it’s the right UI element
+4. move to the target point
+5. read back the real mouse position
+6. click only if the pointer landed where expected (offset ≤ 5px)
+7. capture again and verify UI change
 
 ## Why this matters
 
@@ -37,6 +45,7 @@ Absolute coordinates alone are fragile because:
 - window positions can move
 - screen scaling can change perceived layout
 - a control’s visible center may not be its true hit target
+- **models misinterpret screenshot layouts** (left/right confusion, distance misjudgment)
 
 ## Practical commands
 

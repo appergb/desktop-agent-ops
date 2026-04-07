@@ -80,12 +80,35 @@ For browser-like apps, validation should include:
 - visible page title or URL-equivalent cue matches intent
 - action region is correct
 
+## Close / Quit / Destructive Operations
+
+**NEVER guess close/quit button positions.** Use the platform accessibility tree to find exact pixel coordinates.
+
+### Preferred order for close/quit:
+
+1. **CLI/API first** (no GUI interaction):
+   - macOS: `osascript -e 'tell application "AppName" to quit'`
+   - Windows: `taskkill /IM "app.exe"`
+   - Linux: `wmctrl -c "WindowTitle"` or `xdotool`
+
+2. **Accessibility close button** (if CLI not available):
+   ```bash
+   $PY scripts/accessibility_provider.py --app "AppName" --elements
+   # Find the close button element and use its exact {x, y}
+   ```
+
+3. **Keyboard shortcut** (universal):
+   - macOS: `hotkey --keys cmd q` (quit) or `hotkey --keys cmd w` (close window)
+   - Windows: `hotkey --keys alt F4`
+
+**Never visually estimate where the close button is from a screenshot.**
+
 ## Recovery order
 
 If validation fails:
 1. recapture current state
 2. refocus app
 3. reacquire window bounds
-4. derive region again
+4. re-run accessibility/OCR to get fresh pixel coordinates
 5. retry one action only
 6. escalate or stop if still ambiguous

@@ -1,42 +1,122 @@
 # Windows Path
 
-This file defines the intended Windows branch for the skill.
+This file defines how the skill works on Windows. Read this when running on Windows.
 
-## Preferred direction
+## Core rule: do not guess coordinates
 
-For Windows, prefer a helper-script path that wraps:
+On Windows, click targets must come from:
 
-- `pygetwindow` (Win32 window enumeration/activation, restore minimized windows)
-- screenshot tooling such as Pillow/MSS
-- pyautogui for mouse and keyboard input
-- text input: clipboard paste via PowerShell `Set-Clipboard` + `Ctrl+V` (handles all languages including CJK; falls back to `clip.exe` if PowerShell unavailable)
-- key press / hotkey: `pyautogui.press()` / `pyautogui.hotkey()`
+- `scripts/accessibility_provider.py` when UI Automation exposes the target
+- `scripts/target_resolver.py` when UIA is degraded or blocked
 
-## MVP rule
+Never estimate a click by looking at a screenshot.
 
-Windows helpers are now **best-effort** via `pygetwindow` (frontmost, list windows, focus, bounds). If `pygetwindow` or its dependencies are missing, commands will return structured errors. Be explicit about dependency requirements when failures occur.
+## Key principle: Discover app names dynamically
 
-## Expected Windows command surface
+**NEVER hardcode Windows process names or window titles.** Always discover them at runtime.
 
-Aim to match the macOS helper surface:
+Windows app names vary by:
+- Language version (Chinese WeChat vs English WeChat)
+- App version (different builds have different titles)
+- User customization
 
-- screenshot
-- capture-region
-- frontmost
-- list-apps or windows
-- focus-app
-- click / double-click / drag / scroll
-- type / press / hotkey
+Instead, the agent must discover the correct name dynamically.
 
-## Behavior rule
+## Step 1: Probe running apps first
 
-Keep the top-level workflow the same across platforms; only the helper implementation should differ.
+Before targeting any app, run:
 
-## Windows WeChat note
+```bash
+$PY scripts/desktop_ops.py list-apps
+```
 
-For WeChat on Windows, first check for the visible `发送` button and prefer it as the send trigger.
+This returns all visible window titles on the current Windows desktop. Use the exact title returned.
 
-- type message text with `desktop_ops.py type --text`
-- if a literal line break is needed, use `desktop_ops.py insert-newline`
-- resolve the visible `发送` button with `target_resolver.py --text "发送"` and click it when verified
-- only fall back to `press --key return` if no verified send button exists and Enter-to-send is already confirmed for that host
+## Step 2: If the app is not running
+
+Try to launch it, then re-probe:
+
+```bash
+# Method A: via CLI
+start "" "WeChat"
+# Method B: via search
+# The agent should use web search to find the correct launch command
+```
+
+## Step 3: If you don't know the correct app name
+
+Use web search to find it:
+
+```
+Search: "WeChat Windows process name window title"
+Search: "How to find window title of a running app Windows"
+Search: "微信 Windows 进程名 窗口标题"
+```
+
+Common patterns to look for:
+- Window title in Task Manager → Details tab
+- Process name in Task Manager → Processes tab
+- `tasklist /V` shows window titles
+
+## Step 4: Focus the app
+
+Once the correct window title is confirmed, use it with `focus-app`:
+
+```bash
+$PY scripts/desktop_ops.py focus-app --name "微信"
+# or whatever title list-apps returned
+```
+
+## Preferred tools on Windows
+
+- `accessibility_provider.py` — first choice for structured UIA targeting
+- `target_resolver.py` — tries UIA first, then OCR/template fallback
+- `list-apps` / `frontmost` — window enumeration via `pygetwindow` (requires `pywin32`)
+- `focus-app` — uses `pygetwindow` `.activate()` / `.restore()`
+- screenshot — via `pyautogui` (PIL/Pillow backend)
+- mouse/keyboard — `pyautogui`
+- text input — clipboard paste via PowerShell `Set-Clipboard` → `Ctrl+V`
+- key press — `pyautogui.press()` or `pyautogui.hotkey()`
+- close app — `taskkill /IM "app.exe"` (no GUI needed)
+
+## Windows WeChat send mechanism
+
+On Windows WeChat:
+1. After typing the message, first try to find the visible `发送` button via UIA or OCR
+2. If visible, click it (preferred — avoids accidental double-send)
+3. If no visible send button and Enter-to-send is confirmed, use `press --key return`
+
+The exact button position varies by WeChat version — always re-locate via accessibility or OCR before clicking.
+
+## Windows DPI scaling
+
+Windows display scaling (125%, 150%, 200%, etc.) can cause coordinate mismatches.
+
+If clicks miss targets:
+1. Use `desktop_ops.py screenshot` to visually verify target positions
+2. Check Windows Display Settings → Scale (reset to 100% for best automation accuracy)
+3. pyautogui coordinates are logical pixels — they should match Windows's reported coordinates
+
+## UAC, UIPI, and permissions
+
+Windows accessibility and input automation work best when the agent and the target app run at the same privilege level.
+
+Watch for these cases:
+
+- Elevated target app, non-elevated agent: UIA focus or lookup may fail with access denied
+- UAC prompts or secure desktop: inaccessible to normal automation
+- System windows or protected surfaces: may expose no usable UIA tree
+- Enterprise controls such as AppLocker: may block helper subprocesses
+
+Practical rule:
+
+1. If UIA returns an access or permission-style error, treat it as a real platform boundary, not a targeting miss
+2. Re-check whether the target app is elevated
+3. If safe, fall back to OCR-based targeting through `target_resolver.py`
+4. Do not guess the close button, taskbar button, or dialog position
+
+## Preferred targeting order
+
+1. `scripts/accessibility_provider.py --app "AppName" --text "Target"`
+2. `scripts/target_resolver.py --app "AppName" --text "Target" --python $PY`
+3. Template or heuristic fallback only when text and UIA are both insufficient

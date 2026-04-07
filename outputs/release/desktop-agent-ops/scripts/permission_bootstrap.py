@@ -9,9 +9,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 DESKTOP_OPS = ROOT / "desktop_ops.py"
-PY = os.environ.get("DESKTOP_AGENT_OPS_PYTHON", "python3")
 
-DEFAULT_HOME = Path(os.environ.get("OPENCLAW_DESKTOP_AGENT_OPS_HOME", Path.home() / ".openclaw-desktop-agent-ops")).expanduser().resolve()
+from resolve_python import resolve_ops_home, resolve_python
+PY = resolve_python()
+
+DEFAULT_HOME = resolve_ops_home()
 DEFAULT_STATE = DEFAULT_HOME / "permissions.json"
 
 
@@ -136,11 +138,13 @@ def main():
     elif system == "windows":
         instructions = [
             "On Windows, ensure your terminal is running with appropriate permissions.",
-            "If screenshots or input automation fail, try running the terminal as Administrator.",
+            "If the target app is elevated and this tool is not, Windows UIPI may block UI Automation and simulated input.",
+            "Run the automation process at the same privilege level as the target app before retrying.",
         ]
     elif system == "linux":
         instructions = [
             "On Linux (X11), ensure xdotool and wmctrl are installed for window management.",
+            "For GNOME accessibility targeting, install python3-pyatspi or equivalent AT-SPI bindings.",
             "If using Wayland, some automation features may be limited.",
         ]
     else:
@@ -152,9 +156,27 @@ def main():
     if not host:
         try:
             ppid = os.getppid()
-            host_probe = subprocess.run(["/bin/ps", "-p", str(ppid), "-o", "comm="], capture_output=True, text=True)
-            if host_probe.returncode == 0:
-                host = host_probe.stdout.strip()
+            system = platform.system().lower()
+            if system == "windows":
+                # Windows: use wmic or PowerShell to get parent process name
+                try:
+                    probe = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command",
+                         f"(Get-Process -Id {ppid}).ProcessName"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if probe.returncode == 0:
+                        host = probe.stdout.strip()
+                except Exception:
+                    host = None
+            else:
+                # Unix/macOS: use /bin/ps
+                host_probe = subprocess.run(
+                    ["/bin/ps", "-p", str(ppid), "-o", "comm="],
+                    capture_output=True, text=True, timeout=5
+                )
+                if host_probe.returncode == 0:
+                    host = host_probe.stdout.strip()
         except Exception:
             host = None
 

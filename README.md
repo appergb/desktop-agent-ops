@@ -26,7 +26,8 @@ It provides a complete pipeline from **screen observation** to **precise clickin
 | Capability | Description |
 |-----------|-------------|
 | 🔍 **Window-Scoped OCR** | OCR only scans the target app window — never clicks buttons in the wrong app |
-| 🎯 **OCR-First Targeting** | Finds UI elements by text content, not blind coordinate guessing |
+| ♿ **Accessibility-First** | Uses structured accessibility trees first: macOS AXUIElement, Windows UI Automation, Linux AT-SPI |
+| 🎯 **Smart Fallback OCR** | Falls back to Vision OCR / Tesseract when accessibility is sparse, blocked, or unavailable |
 | 📐 **DPI-Aware** | Auto-detects Retina/HiDPI scaling on all platforms (1x, 1.5x, 2x, 3x) |
 | 🌐 **Multi-Language OCR** | Auto-detects system language and installs matching Tesseract packs |
 | ⌨️ **CJK Text Input** | Reliable Chinese/Japanese/Korean input via clipboard-paste fallback |
@@ -49,6 +50,7 @@ graph TB
         B[SKILL.md] --> C[first_run_setup.py]
     end
     subgraph "🎯 Targeting Layer"
+        AX[accessibility_provider.py<br/>AX / UIA / AT-SPI]
         D[target_resolver.py]
         E[ocr_text.py]
         F[template_match.py]
@@ -62,7 +64,8 @@ graph TB
         K[Linux]
     end
     A --> B
-    C --> D
+    C --> AX & D
+    AX --> D
     D --> E & F
     E & F --> H
     H --> I & J & K
@@ -72,30 +75,33 @@ graph TB
 
 ---
 
-## 🎯 Targeting Pipeline
+## 🎯 Targeting Pipeline (Accessibility-First)
 
-The core innovation: **always scope to the target app window before OCR**.
+The core rule: **use a structured accessibility tree first, screenshot only when needed.**
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ Step 1: FOCUS target app                             │
-│   desktop_ops.py focus-app --name "WeChat"           │
-├──────────────────────────────────────────────────────┤
-│ Step 2: GET window bounds                            │
-│   → {x:100, y:50, width:800, height:600}             │
-├──────────────────────────────────────────────────────┤
-│ Step 3: CAPTURE only that window                     │
-│   → screenshot contains ONLY the target app          │
-├──────────────────────────────────────────────────────┤
-│ Step 4: OCR within window (auto DPI scaling)         │
-│   → finds "Send" at logical coordinates (450, 520)   │
-├──────────────────────────────────────────────────────┤
-│ Step 5: VERIFY target before clicking                │
-│   → confirms coordinate is inside window bounds      │
-├──────────────────────────────────────────────────────┤
-│ Step 6: CLICK only if verified                       │
-│   → click (450, 520) → verify UI changed             │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Step 1: FOCUS target app                                  │
+│   desktop_ops.py focus-app --name "WeChat"                │
+├──────────────────────────────────────────────────────────┤
+│ Step 2: TRY ACCESSIBILITY API (no screenshot needed)      │
+│   accessibility_provider.py --app "WeChat" --text "Send"  │
+│   → Returns structured JSON: {x, y, confidence: 1.0}     │
+│   → ~34ms, ~200 tokens (vs 30,000-60,000 for screenshot) │
+│   → If found: skip to Step 5                              │
+├──────────────────────────────────────────────────────────┤
+│ Step 3: FALLBACK — capture window (only if AX degraded)   │
+│   → screenshot contains ONLY the target app               │
+├──────────────────────────────────────────────────────────┤
+│ Step 4: OCR within window (auto DPI scaling)              │
+│   → finds "Send" at logical coordinates (450, 520)        │
+├──────────────────────────────────────────────────────────┤
+│ Step 5: VERIFY target before clicking                     │
+│   → confirms coordinate is inside window bounds           │
+├──────────────────────────────────────────────────────────┤
+│ Step 6: CLICK only if verified                            │
+│   → click (450, 520) → verify UI changed                  │
+└──────────────────────────────────────────────────────────┘
 ```
 
 > 📄 [View full targeting sequence diagram →](docs/targeting-pipeline.md)
@@ -219,15 +225,16 @@ flowchart LR
 | System deps | `brew install cliclick tesseract` | Guide: `choco install tesseract` | Guide: `apt install xdotool wmctrl tesseract-ocr` |
 | OCR languages | Auto-detect locale → `brew install tesseract-lang` | Auto-detect via `locale.getdefaultlocale()` | Auto-detect via `LANG` env |
 | Python venv | `uv venv` + `uv pip install` | Same | Same |
-| Permissions | Screen Recording, Accessibility, Automation | N/A | N/A |
+| Permissions | Screen Recording, Accessibility, Automation | Same privilege level as target app for best UIA results | AT-SPI session access; input varies by X11/Wayland |
 | Smoke test | screenshot + mouse move + pixel read | Same | Same (X11) |
 
 ---
 
 ## 💻 Supported Platforms
 
-| Feature | macOS | Windows | Linux (X11) |
+| Feature | macOS | Windows | Linux |
 |---------|-------|---------|-------------|
+| Accessibility API | AXUIElement (native) | UI Automation (native) | AT-SPI (GNOME / `pyatspi`) |
 | Screenshot | screencapture | pyautogui | pyautogui/scrot |
 | Mouse | cliclick → pyautogui | pyautogui | pyautogui |
 | Window focus | AppleScript | pygetwindow | wmctrl |
@@ -252,15 +259,21 @@ desktop-agent-ops/
 │
 ├── skill/                             # ← Skill package (what agents use)
 │   ├── SKILL.md                       #   Agent operating manual
-│   ├── agents/                        #   Skill UI metadata
-│   │   └── openai.yaml                #   Display name, prompt, policy
+│   ├── desktop-agent-ops.md               #   Standard skill entry (accessibility-first, <200 lines)
+│   ├── agents/                        #   Skill UI metadata (deprecated — openclaw only)
+│   │   └── openai.yaml                #   Deprecated; Claude Code uses frontmatter
 │   ├── workflows/                     #   Custom workflow definitions
 │   │   └── examples/                  #   3 bundled example workflows
 │   ├── scripts/                       #   Python scripts
 │   │   ├── first_run_setup.py         #   🔧 One-command auto-setup
+│   │   ├── accessibility_provider.py   #   ♿ Unified AX / UIA / AT-SPI entry
+│   │   ├── ax_provider.py              #   ♿ macOS AX backend
+│   │   ├── windows_uia_provider.py     #   🪟 Windows UI Automation backend
+│   │   ├── linux_atspi_provider.py     #   🐧 Linux AT-SPI backend
 │   │   ├── desktop_ops.py             #   ⚙️ 18 desktop operations
-│   │   ├── target_resolver.py         #   🎯 OCR-first hybrid targeting
+│   │   ├── target_resolver.py         #   🎯 Accessibility-first hybrid targeting
 │   │   ├── ocr_text.py                #   🔍 Multi-lang OCR + DPI
+│   │   ├── vision_ocr.py              #   👁️ Apple Vision / Google Vision OCR
 │   │   ├── permission_bootstrap.py    #   🔐 OS permission requests
 │   │   ├── click_and_verify.py        #   ✅ Safe click pipeline
 │   │   ├── window_regions.py          #   📐 Semantic window regions
@@ -273,8 +286,9 @@ desktop-agent-ops/
 │   │   ├── task_paths.py              #   🔒 Safe task path resolution
 │   │   ├── cleanup_task.py            #   🧹 Cleanup
 │   │   ├── platform_probe.py          #   🔎 OS detection
+│   │   ├── window_kernel.py           #   🪟 Shared restore lifecycle
+│   │   ├── window_backends.py         #   🧩 Platform window backends
 │   │   ├── targeting.py               #   📍 Candidate points
-│   │   ├── bootstrap_env.py           #   📦 Legacy venv setup
 │   │   ├── workflow_loader.py         #   🔄 Workflow discovery & parsing
 │   │   ├── workflow_runner.py         #   🚀 Workflow execution engine
 │   │   ├── secret_scanner.py          #   🔐 Sensitive info detection
@@ -341,9 +355,15 @@ $PY skill/scripts/desktop_ops.py pixel-color --x X --y Y
 </details>
 
 <details>
-<summary><b>target_resolver.py — OCR-First Element Targeting</b></summary>
+<summary><b>target_resolver.py — Accessibility-First Element Targeting</b></summary>
 
 ```bash
+# Accessibility API direct query (no screenshot, fastest)
+$PY skill/scripts/accessibility_provider.py --app "AppName" --text "button text"
+
+# Inspect full UI element tree
+$PY skill/scripts/accessibility_provider.py --app "AppName" --elements
+
 # Find element by visible text (OCR)
 $PY skill/scripts/target_resolver.py --app "AppName" --text "button text" --python $PY
 

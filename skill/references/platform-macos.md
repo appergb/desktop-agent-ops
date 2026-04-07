@@ -1,5 +1,14 @@
 # macOS Path
 
+## Key principle: Discover app names dynamically
+
+**NEVER assume you know the exact app name.** Always probe first.
+
+When the user asks to operate an app (e.g. "微信", "WeChat", "Safari"):
+1. Run `list-apps` to see all running app names
+2. If the target app is not running, try `open -a "WeChat"` or similar
+3. If the app name is uncertain (e.g. Chinese vs English), use web search to find the correct name
+
 ## Preferred tools
 
 For macOS, prefer these primitives:
@@ -10,7 +19,7 @@ For macOS, prefer these primitives:
 - text input: clipboard paste via `set the clipboard to` + `Cmd+V` (handles all languages including CJK)
 - key press: AppleScript `key code` (preferred, most reliable for apps like WeChat) → `cliclick kp:` (fallback)
 - hotkey: `cliclick kd:/t:/ku:` (modifier keys + character) → `pyautogui.hotkey` (fallback)
-- focus-app: fast path if already frontmost; Dock click to restore minimized windows; `activate` + `AXRaise`
+- focus-app: shared window kernel with `activate` + unminimize via `AXMinimized=false` + `AXRaise`; if the app becomes frontmost but still exposes no usable window, fall back to `open -a`
 
 Use them through `scripts/desktop_ops.py`, not ad hoc each time.
 
@@ -59,7 +68,7 @@ When working with chat apps such as WeChat:
 - when a multi-line message is needed, use `desktop_ops.py insert-newline` for the line break and keep `press --key return` for the actual send event
 - after a send trigger, wait a short moment (0.3–0.5s) before verification capture
 - if the first verification capture is ambiguous, recapture once more at about 1 second total elapsed before treating it as a failure
-- `focus-app` skips Dock traversal if app is already frontmost (fast path ~0.3s vs full ~1s)
+- if WeChat is already running but its main window is minimized or hidden, `focus-app` should still restore a usable window before the task continues
 
 
 ### Bring an app forward
@@ -82,4 +91,4 @@ When working with chat apps such as WeChat:
 - `focus-window` may be added later, but `focus-app` is enough for MVP
 - prefer explicit re-capture after activation because animation and focus changes can lag
 - when a text search UI exists, use it instead of manual scanning/scrolling
-ts/doctor.py`
+- if an app becomes frontmost but `front-window-bounds` still fails, treat that as a restore failure and retry through the shared window kernel rather than guessing coordinates

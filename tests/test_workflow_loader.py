@@ -1,6 +1,10 @@
+import importlib
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / 'skill' / 'scripts'
 if str(SCRIPTS_DIR) not in sys.path:
@@ -157,3 +161,30 @@ class ValidateWorkflowTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SharedHomeResolutionTests(unittest.TestCase):
+    def _reload_module(self, name):
+        sys.modules.pop(name, None)
+        return importlib.import_module(name)
+
+    def test_desktop_agent_ops_home_takes_priority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {
+                    'DESKTOP_AGENT_OPS_HOME': tmp,
+                    'CODEX_DESKTOP_AGENT_OPS_HOME': '/tmp/codex-home',
+                    'CLAUDE_DESKTOP_AGENT_OPS_HOME': '/tmp/claude-home',
+                    'OPENCLAW_DESKTOP_AGENT_OPS_HOME': '/tmp/openclaw-home',
+                },
+                clear=False,
+            ):
+                resolve_python = self._reload_module('resolve_python')
+                self.assertEqual(resolve_python.resolve_ops_home(), Path(tmp).resolve())
+
+    def test_workflow_loader_uses_shared_home_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {'DESKTOP_AGENT_OPS_HOME': tmp}, clear=False):
+                workflow_loader = self._reload_module('workflow_loader')
+                self.assertEqual(workflow_loader.USER_DIR, Path(tmp).resolve() / 'workflows')

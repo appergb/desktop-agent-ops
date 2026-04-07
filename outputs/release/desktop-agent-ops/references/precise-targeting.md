@@ -2,6 +2,17 @@
 
 Use this file when rough full-screen clicking is no longer good enough.
 
+## CRITICAL: Never estimate coordinates from screenshots
+
+**The #1 cause of click errors**: the model looks at a screenshot and guesses where to click. Models frequently confuse left/right, misjudge distances, and pick wrong pixel positions — especially smaller models.
+
+**The fix**: ALWAYS get click coordinates from programmatic sources:
+- `accessibility_provider.py` → returns exact element positions from the platform accessibility tree
+- `target_resolver.py` → returns best_candidate {x, y} from accessibility or OCR
+- `ocr_text.py` → returns text box positions with abs_box {x, y, width, height}
+
+Screenshots are for **verification only** (confirm cursor is in the right place, confirm UI changed after action). Never for deriving click positions.
+
 ## Goal
 
 Turn "I think the target is somewhere here" into a repeatable targeting process that can be reused across apps.
@@ -11,9 +22,9 @@ Turn "I think the target is somewhere here" into a repeatable targeting process 
 Targeting should happen in layers:
 
 1. get the front window bounds
-2. reduce the problem to a region inside that window
-3. generate candidate points inside the region
-4. move first, then verify live cursor position
+2. use accessibility/OCR to get exact pixel coordinates of the target
+3. bounds-check: verify coordinates are within the window
+4. move first, then verify live cursor position (readback)
 5. click only after the pointer is where expected
 6. recapture and verify the UI changed as intended
 

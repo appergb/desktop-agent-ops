@@ -93,7 +93,7 @@ $PY desktop_ops.py focus-app --name "$app"
 ## Where to save / 存放位置
 
 - **社区/内置工作流**: `skill/workflows/` 及其子目录（随项目发布）
-- **用户自定义工作流**: `~/.openclaw-desktop-agent-ops/workflows/`
+- **用户自定义工作流**: `~/.claude/desktop-agent-ops/workflows/`
 
 用户目录中的工作流优先级高于社区工作流（同名时用户版本覆盖社区版本）。
 
@@ -103,13 +103,13 @@ $PY desktop_ops.py focus-app --name "$app"
 
 ```bash
 # 列出所有可用工作流
-$PY workflow_loader.py discover
+$PY scripts/workflow_loader.py discover
 
 # 加载并显示工作流详情
-$PY workflow_loader.py load --workflow send-chat-message
+$PY scripts/workflow_loader.py load --workflow send-chat-message
 
 # 验证工作流格式是否正确
-$PY workflow_loader.py validate --workflow send-chat-message
+$PY scripts/workflow_loader.py validate --workflow send-chat-message
 ```
 
 ## Tips for writing good workflows / 编写技巧

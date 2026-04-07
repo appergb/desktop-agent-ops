@@ -1,5 +1,108 @@
 # Changelog
 
+## v1.4.0 (2026-04-06)
+
+### Bug Fixes — Comprehensive Audit & Hardening
+
+- **desktop_ops.py** — 8 fixes
+  - CRITICAL: Fixed `cmd_pixel_color` producing double JSON output (broken every call)
+  - CRITICAL: Fixed Windows `paste_text` encoding raw text as PowerShell command (code injection + broken primary path)
+  - Fixed all `run()` callers to catch `SystemExit` and return structured JSON errors instead of plain text
+  - Fixed `focus-app` using substring match (`in`) — now uses exact match to prevent "Mail" matching "Airmail"
+  - Fixed `_key_to_keycode` silently defaulting unknown keys to Return (keycode 36) — now raises JSON error
+  - Fixed middle-click and multi-click falling through to `SystemExit` — now gracefully falls back to pyautogui
+  - Fixed `paste_text` failing on multi-line text via AppleScript — now detects newlines and uses `pbcopy` directly
+  - Fixed `drag` command raising `SystemExit` with plain text for non-left buttons
+
+- **first_run_setup.py** — 4 fixes
+  - Fixed missing `FileNotFoundError` handler in `stage_permissions` (crash risk)
+  - Fixed `locale.getdefaultlocale()` deprecated since Python 3.11 — replaced with `locale.getlocale()`
+  - Fixed `brew` variable not used in tesseract prefix lookup (bare "brew" could fail on non-standard PATH)
+  - Updated docstring from "5 stages" to "6 stages" to match actual implementation
+
+- **accessibility_provider.py** — 3 fixes
+  - CRITICAL: Fixed unconditional cross-platform imports crashing on every platform (e.g. importing `pyatspi` on macOS)
+  - Fixed double `_normalize_payload` wrapping (wasted computation, confusing intent)
+  - Added exception handling around provider calls in CLI entry point
+  - Added `confidence: 1.0` default to accessibility matches for consistent scoring in `choose_best()`
+
+- **target_resolver.py** — 7 fixes
+  - Fixed `heuristic_region` branch missing `break`/`continue` — silently fell through to `unknown_provider`
+  - Added try/except around all provider subprocess calls — prevent cascade crash on Tesseract/template errors
+  - Fixed window bounds check truthy for missing `ok` key and using 99999 fallback defaults
+  - Fixed `ok: true` always emitted even when no target found — now `ok` reflects whether best_candidate exists
+  - Removed dead code: redundant `len(q) == 1` branch in `match_text`
+  - Fixed `heuristic_provider` using bare `[]` indexing on potentially missing `region.absolute` keys
+  - Fixed CJK merge producing overlapping duplicate matches — now tracks consumed indices
+  - Updated docstring from "three-layer" to "four-layer"
+
+- **ocr_text.py** — 2 fixes
+  - Fixed `tempfile.mktemp` (deprecated, TOCTOU race) — replaced with `tempfile.mkstemp`
+  - Added cleanup for DPI probe temporary files (previously leaked to `/tmp`)
+
+- **vision_ocr.py** — 3 fixes
+  - Fixed aggressive `zh-Hans` fallback for all non-detected locales — now only adds if system locale is Chinese
+  - Replaced magic number `3` in `setRevision_` with named constant
+  - Fixed `tempfile.mktemp` in `detect_dpi_scale` — replaced with `tempfile.mkstemp` + `finally` cleanup
+
+- **workflow_loader.py** — 1 fix
+  - Fixed f-string `${{pname}}` producing literal `${pname}` — parameter validation now correctly checks actual parameter names
+
+- **workflow_runner.py** — 2 fixes
+  - Fixed `$PY` plain `.replace()` corrupting longer variables like `$PYTHON_PATH` — now uses regex word-boundary matching
+  - Fixed retry state corruption — `prev_result` is now copied before each attempt, only committed on success
+
+- **click_and_verify.py** — 3 fixes
+  - Fixed no bounds checking on `candidate_index` — `IndexError` crash with no JSON output
+  - Fixed `tempfile.mktemp` — replaced with `tempfile.mkstemp`
+  - Added cleanup of pre/post screenshot temp files
+
+- **targeting.py** — 2 fixes
+  - Fixed small elements (< 2×inset) producing inverted/wrong click coordinates — inset now clamped to half of element size
+  - Fixed `SystemExit` with plain text breaking JSON error protocol — now outputs structured JSON error
+
+### Documentation
+
+- Updated "three-layer" references to "four-layer" across SKILL.md
+- Fixed "8-step closed loop" → "Core task lifecycle (macro-level)" to distinguish from per-click 7-step loop
+- Clarified `--min-conf` (ocr_text.py) vs `--ocr-min-conf` (target_resolver.py) in failure recovery sections
+- Updated test fixtures for new accessibility provider behavior
+
+## v1.3.0 (2026-04-04)
+
+### Features
+
+- **AX-First Execution Flow** — Accessibility API is now the primary targeting method
+  - `ax_provider.py` returns structured JSON (~200 tokens) vs screenshots (~30,000-60,000 tokens)
+  - Core loop changed: Focus → AX query → (fallback to screenshot+OCR) → Verify → Act
+  - New Hard Rule #2: "AX before screenshot"
+  - Token cost comparison added to targeting pipeline docs
+
+- **Standard Claude Code Skill Entry File** — `desktop-agent-ops.md`
+  - Proper frontmatter: name, description, whenToUse, effort, tools, disallowedTools
+  - Concise 200-line quick operations manual
+  - On-demand deep reference loading via `Read skill/SKILL.md`
+
+- **Enhanced Task State Management** — `task_context.py`
+  - New fields: step_count, current_step_retries, max_retries, total_actions, error_log
+  - New CLI subcommands: `step`, `retry`, `finalize`, `record-error`
+  - `cleanup_task.py` now archives `summary.json` to `~/.openclaw-desktop-agent-ops/task-history/`
+
+- **Workflow Step Enhancements** — `workflow_runner.py`
+  - `$STEP_N_field` syntax for cross-step variable references
+  - Per-step timeout (workflow-level and step-level `timeout` field)
+
+- **Wayland Support Improvements** — `platform_probe.py`
+  - Outputs `limitations` and `workarounds` when Wayland session detected
+  - Checks for `ydotool` availability
+
+### Changes
+
+- `SKILL.md` reduced from 610 to ~360 lines (-43%), repositioned as detailed reference manual
+- Three-layer documentation: entry file → SKILL.md (core rules) → references/ (deep docs)
+- Hard Rules expanded from 14 to 16 (added AX-first and screenshot management rules)
+- `target-providers.md` updated with token cost comparison table
+
 ## v1.2.2 (2026-04-04)
 
 ### Bug Fixes
