@@ -9,6 +9,7 @@ tags: [browser, search, web]
 parameters:
   - name: browser, default: "Safari", description: 浏览器应用名称
   - name: query, required: true, description: 搜索关键词
+  - name: address_bar_modifier, default: "cmd", description: macOS 用 cmd，Windows/Linux 通常用 ctrl
 ---
 
 # Browser Search / 浏览器搜索
@@ -18,7 +19,7 @@ parameters:
 ## Step 1: Focus browser
 
 ```bash
-$PY desktop_ops.py focus-app --name "$browser"
+$PY $SCRIPT_DIR/desktop_ops.py focus-app --name "$browser"
 ```
 
 ### Verify
@@ -27,8 +28,7 @@ $PY desktop_ops.py focus-app --name "$browser"
 ## Step 2: Activate address bar
 
 ```bash
-# Cmd+L 聚焦地址栏（适用于所有主流浏览器）
-$PY desktop_ops.py hotkey --keys cmd l
+$PY $SCRIPT_DIR/desktop_ops.py hotkey --keys $address_bar_modifier l
 ```
 
 ### Verify
@@ -37,7 +37,7 @@ $PY desktop_ops.py hotkey --keys cmd l
 ## Step 3: Type search query
 
 ```bash
-$PY desktop_ops.py type --text "$query"
+$PY $SCRIPT_DIR/desktop_ops.py type --text "$query"
 ```
 
 ### Verify
@@ -46,7 +46,7 @@ $PY desktop_ops.py type --text "$query"
 ## Step 4: Execute search
 
 ```bash
-$PY desktop_ops.py press --key return
+$PY $SCRIPT_DIR/desktop_ops.py press --key return
 ```
 
 ### Verify
@@ -57,7 +57,7 @@ $PY desktop_ops.py press --key return
 ## Step 5: Capture search results
 
 ```bash
-$PY desktop_ops.py screenshot --output /tmp/search_result.png
+$PY $SCRIPT_DIR/desktop_ops.py screenshot --output /tmp/search_result.png
 ```
 
 ### Verify

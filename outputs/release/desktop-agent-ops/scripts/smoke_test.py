@@ -16,7 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DESKTOP_OPS = ROOT / "desktop_ops.py"
 DOCTOR = ROOT / "doctor.py"
-PY = os.environ.get("DESKTOP_AGENT_OPS_PYTHON", "python3")
+
+from resolve_python import resolve_python
+PY = resolve_python()
 
 # Two targets far apart so we can verify the move actually happens.
 # Even if cliclick reports scaled coordinates, moving from corner

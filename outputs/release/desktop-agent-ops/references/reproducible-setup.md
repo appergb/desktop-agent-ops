@@ -20,7 +20,7 @@ Keep the packaged skill directory clean.
 Use an external runtime directory such as:
 
 - workspace-local: `cache/desktop-agent-ops/venv`
-- future shared host pattern: `$OPENCLAW_DESKTOP_AGENT_OPS_HOME/venv`
+- future shared host pattern: `$CLAUDE_DESKTOP_AGENT_OPS_HOME/venv`
 
 Recommended environment variable:
 

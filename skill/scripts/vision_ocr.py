@@ -78,8 +78,17 @@ def auto_detect_vision_langs():
     except Exception:
         pass
     # If system is Chinese but not detected, add zh-Hans as safe default
+    # Only add if system locale hints at Chinese
+    import subprocess as _sp
     if len(langs) == 1:
-        langs.append("zh-Hans")
+        try:
+            p = _sp.run(["defaults", "read", "-g", "AppleLocale"],
+                        capture_output=True, text=True, timeout=3)
+            locale_str = p.stdout.strip() if p.returncode == 0 else ""
+            if locale_str.startswith("zh"):
+                langs.append("zh-Hans")
+        except Exception:
+            pass
     return langs
 
 
@@ -162,9 +171,10 @@ def ocr_image(image_path, languages=None, level="fast", dpi_scale=1.0):
     rec_level = 0 if level == "accurate" else 1
     request.setRecognitionLevel_(rec_level)
 
-    # Try revision 3 (macOS 14+, best CJK)
+    # Try latest revision for best CJK support (revision 3 = macOS 14+)
     try:
-        request.setRevision_(3)
+        VN_REVISION_3 = 3  # VNRecognizeTextRequestRevision3
+        request.setRevision_(VN_REVISION_3)
     except Exception:
         pass
 
@@ -194,13 +204,17 @@ def detect_dpi_scale(python_exec):
         if logical_w <= 0:
             return 1.0
 
-        tmp = tempfile.mktemp(prefix="dpi-probe-", suffix=".png")
-        p = subprocess.run([python_exec, str(desktop_ops), "screenshot", "--output", tmp],
-                           capture_output=True, text=True, check=True)
-        from PIL import Image
-        img = Image.open(tmp)
-        pixel_w = img.width
-        Path(tmp).unlink(missing_ok=True)
+        import os as _os
+        fd, tmp = tempfile.mkstemp(prefix="dpi-probe-", suffix=".png")
+        _os.close(fd)
+        try:
+            p = subprocess.run([python_exec, str(desktop_ops), "screenshot", "--output", tmp],
+                               capture_output=True, text=True, check=True)
+            from PIL import Image
+            img = Image.open(tmp)
+            pixel_w = img.width
+        finally:
+            Path(tmp).unlink(missing_ok=True)
 
         if pixel_w > 0 and logical_w > 0:
             return round((pixel_w / logical_w) * 2) / 2

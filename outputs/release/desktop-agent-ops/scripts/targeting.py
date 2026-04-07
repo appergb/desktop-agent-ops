@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import sys
 
 
 def jprint(data):
@@ -8,10 +9,13 @@ def jprint(data):
 
 
 def candidate_points(x, y, width, height, inset=12):
-    left = x + inset
-    right = x + width - inset
-    top = y + inset
-    bottom = y + height - inset
+    # Clamp inset to prevent inverted coordinates on small elements
+    effective_inset_x = min(inset, width // 2)
+    effective_inset_y = min(inset, height // 2)
+    left = x + effective_inset_x
+    right = x + width - effective_inset_x
+    top = y + effective_inset_y
+    bottom = y + height - effective_inset_y
     cx = x + width // 2
     cy = y + height // 2
     return [
@@ -48,7 +52,9 @@ def region_from_window(x, y, width, height, anchor, dx=0, dy=0, rw=None, rh=None
             "height": rh or int(height * 0.08),
             "label": "top_search",
         }
-    raise SystemExit(f"unsupported anchor: {anchor}")
+    jprint({"ok": False, "error": f"unsupported anchor: {anchor}",
+            "supported": ["bottom_input", "left_sidebar_top", "top_search"]})
+    sys.exit(1)
 
 
 def main():

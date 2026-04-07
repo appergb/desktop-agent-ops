@@ -4,15 +4,16 @@ workflow_loader.py — Workflow discovery, parsing, and validation.
 
 Discovers workflow files from:
   1. skill/workflows/          (bundled/community)
-  2. ~/.openclaw-desktop-agent-ops/workflows/  (user local, takes precedence)
+  2. ~/.claude/desktop-agent-ops/workflows/  (user local, takes precedence)
 
 Workflow format: Markdown with YAML frontmatter (--- delimited).
 """
 import json
-import os
 import re
 import sys
 from pathlib import Path
+
+from resolve_python import resolve_ops_home
 
 # ── Directories ──────────────────────────────────────────────────────────────
 
@@ -20,11 +21,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPTS_DIR.parent
 COMMUNITY_DIR = SKILL_DIR / 'workflows'
 
-_home_base = Path(os.environ.get(
-    'OPENCLAW_DESKTOP_AGENT_OPS_HOME',
-    Path.home() / '.openclaw-desktop-agent-ops',
-))
-USER_DIR = _home_base / 'workflows'
+USER_DIR = resolve_ops_home() / 'workflows'
 
 # ── JSON output helpers (match project convention) ───────────────────────────
 
@@ -350,7 +347,7 @@ def validate_workflow(workflow):
             cmd for step in steps for cmd in step.get('commands', [])
         )
         for pname in declared:
-            if f'${pname}' not in all_cmds and f'${{pname}}' not in all_cmds:
+            if f'${pname}' not in all_cmds and '${' + pname + '}' not in all_cmds:
                 errors.append(f"Declared parameter '{pname}' is never referenced in steps")
 
     return errors

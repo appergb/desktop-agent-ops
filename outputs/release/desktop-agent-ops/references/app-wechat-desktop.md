@@ -12,6 +12,7 @@ Treat sending as a decision ladder, not a hardcoded single action:
 4. if the send button is visible and verified, click the send button
 5. if there is no verified send button, and the host is confirmed to be direct-Enter-to-send, run `desktop_ops.py press --key return`
 6. if neither path is verified, do not send yet
+7. if the target conversation is not visible in the sidebar, use the search box to search the exact conversation name first, then click the matching search result
 
 This is the required WeChat workflow for this skill, and it should also be generalized to similar desktop chat apps.
 
@@ -37,19 +38,22 @@ macOS WeChat may rely more often on direct-Enter-to-send.
 
 - if a verified `发送` button is available, it is still safe to prefer that explicit UI action
 - if no verified send button is available, use `desktop_ops.py press --key return` only after the draft is visibly in the true composer and Enter-to-send is known for the host
+- if WeChat is running but its chat window is minimized or hidden, `focus-app --name "WeChat"` should restore the main window before any OCR or accessibility lookup starts
+- if `focus-app` succeeds but `front-window-bounds` still cannot read a usable window, stop and treat that as a window-restore failure instead of clicking blindly
 
 ## Recommended workflow
 
 1. focus WeChat
 2. verify the correct conversation is active
-3. click the true composer region
-4. type message text with `desktop_ops.py type --text`
-5. if the message needs a real line break, use `desktop_ops.py insert-newline`
-6. verify the full draft is visible in the composer
-7. look for a verified visible `发送` button
-8. if found, click it
-9. otherwise, if Enter-to-send is verified for this host, run `desktop_ops.py press --key return`
-10. capture again and verify the outgoing message bubble appears
+3. if the conversation is not already visible, use the sidebar search box to search it and click the matching result
+4. click the true composer region
+5. type message text with `desktop_ops.py type --text`
+6. if the message needs a real line break, use `desktop_ops.py insert-newline`
+7. verify the full draft is visible in the composer
+8. look for a verified visible `发送` button
+9. if found, click it
+10. otherwise, if Enter-to-send is verified for this host, run `desktop_ops.py press --key return`
+11. capture again and verify the outgoing message bubble appears
 
 ## Important caution
 

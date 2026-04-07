@@ -6,9 +6,10 @@ This script is the SINGLE entry point that agents call on first use.
 It is fully idempotent: each stage checks whether it already passed
 and skips if so. Run with --force to redo everything.
 
-Pipeline:
+Pipeline (6 stages):
   1. Platform detection
   2. System dependencies (brew install cliclick tesseract on macOS)
+  2b. OCR language packs (auto-detect system locale)
   3. Python venv + pip dependencies (via uv)
   4. OS permission bootstrap (Screen Recording, Accessibility, Automation)
   5. Smoke test verification
@@ -31,13 +32,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SKILL_ROOT = ROOT.parent
+sys.path.insert(0, str(ROOT))
 
-DEFAULT_HOME = Path(
-    os.environ.get(
-        "OPENCLAW_DESKTOP_AGENT_OPS_HOME",
-        Path.home() / ".openclaw-desktop-agent-ops",
-    )
-).expanduser().resolve()
+from resolve_python import resolve_ops_home
+
+DEFAULT_HOME = resolve_ops_home()
 
 STATE_FILE = DEFAULT_HOME / "setup_state.json"
 PERMISSION_FILE = DEFAULT_HOME / "permissions.json"
@@ -147,9 +146,22 @@ def stage_system_deps(state, force, system):
     if not force and stage_done(state, "system_deps"):
         return state["stages"]["system_deps"]
 
-    if system != "darwin":
-        # On Linux/Windows, system deps are handled differently; skip for now
-        return {"ok": True, "skipped": True, "reason": f"no auto-install for {system}"}
+    if system == "windows":
+        # Windows: no automated system dep install, provide guidance
+        hint = (
+            "Windows system deps must be installed manually:\n"
+            "  - Tesseract: choco install tesseract -y  (or download from GitHub)\n"
+            "  - UI Automation uses built-in Windows/.NET APIs, but automation may still be blocked by UIPI\n"
+            "  - Python deps: uv pip install <packages>  (handled automatically by this script)"
+        )
+        return {"ok": True, "skipped": True, "reason": "no auto-install for windows", "hint": hint}
+    elif system == "linux":
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "no auto-install for linux",
+            "hint": "Install via: sudo apt install xdotool wmctrl tesseract-ocr python3-pyatspi",
+        }
 
     # Check if brew is available
     brew = shutil.which("brew")
@@ -209,10 +221,10 @@ def _detect_system_languages():
         except Exception:
             pass
     elif system == "windows":
-        # Windows: use locale.getdefaultlocale() for system locale
+        # Windows: use locale.getlocale() for system locale
         try:
             import locale
-            def_locale = locale.getdefaultlocale()
+            def_locale = locale.getlocale()
             if def_locale and def_locale[0]:
                 loc = def_locale[0]
                 for prefix, tess_code in LOCALE_TO_TESS_LANG.items():
@@ -285,12 +297,31 @@ def stage_ocr_langs(state, force, system):
     if not missing:
         return {"ok": True, "needed": needed, "already_installed": True}
 
-    if system != "darwin":
+    if system == "windows":
+        # Windows: show Windows-specific installation instructions
+        lang_hint = " ".join(missing)
+        hint = (
+            f"Install Tesseract for Windows manually:\n"
+            f"  Option 1 (Chocolatey): choco install tesseract -y\n"
+            f"  Option 2 (winget):     winget install --id UB.Martin.Folland.TesseractOCR -e\n"
+            f"  Option 3 (manual):    Download from https://github.com/UB-Mannheim/tesseract/wiki\n"
+            f"  After install, restart terminal and run this script again.\n"
+            f"  Missing language packs: {lang_hint}"
+        )
+        return {
+            "ok": True,
+            "needed": needed,
+            "missing": missing,
+            "hint": hint,
+            "skipped": True,
+        }
+    elif system == "linux":
         return {
             "ok": True,
             "needed": needed,
             "missing": missing,
             "hint": f"Install manually: sudo apt install {' '.join('tesseract-ocr-' + m for m in missing)}",
+            "skipped": True,
         }
 
     # macOS: install tesseract-lang (contains ALL languages) or individual traineddata
@@ -310,7 +341,7 @@ def stage_ocr_langs(state, force, system):
     # Fallback: try downloading individual traineddata files
     tessdata_dir = None
     try:
-        p = subprocess.run(["brew", "--prefix", "tesseract"], capture_output=True, text=True, timeout=5)
+        p = subprocess.run([brew, "--prefix", "tesseract"], capture_output=True, text=True, timeout=5)
         if p.returncode == 0:
             tessdata_dir = Path(p.stdout.strip()) / "share" / "tessdata"
     except Exception:
@@ -347,6 +378,11 @@ PYTHON_DEPS_MACOS = [
     "pyobjc-framework-Quartz",
 ]
 
+# Windows: pywin32 is required by pygetwindow; mss for better screenshots
+PYTHON_DEPS_WINDOWS = [
+    "pywin32",
+]
+
 # Tesseract is now optional (fallback on macOS, primary on Linux/Windows)
 PYTHON_DEPS_TESSERACT = [
     "pytesseract",
@@ -360,8 +396,11 @@ def _build_python_deps(system):
         deps.extend(PYTHON_DEPS_MACOS)
         # Tesseract optional on macOS (Vision is primary)
         deps.extend(PYTHON_DEPS_TESSERACT)
+    elif system == "windows":
+        deps.extend(PYTHON_DEPS_WINDOWS)
+        deps.extend(PYTHON_DEPS_TESSERACT)
     else:
-        # Windows/Linux: Tesseract is primary OCR
+        # Linux: Tesseract is primary OCR
         deps.extend(PYTHON_DEPS_TESSERACT)
     return deps
 
@@ -467,6 +506,8 @@ def stage_permissions(state, force, system, python_exec):
         }
     except subprocess.TimeoutExpired:
         result = {"ok": False, "stdout": "", "stderr": "timeout"}
+    except FileNotFoundError:
+        result = {"ok": False, "stdout": "", "stderr": f"python not found: {python_exec}"}
 
     # Parse the JSON output
     parsed = None
@@ -574,7 +615,8 @@ def main():
                 for name in ["platform", "system_deps", "ocr_langs", "python_env", "permissions", "smoke_test"]
             },
             "env": {
-                "OPENCLAW_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+                "DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+                "CLAUDE_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
                 "DESKTOP_AGENT_OPS_PYTHON": python_exec,
             },
         })
@@ -623,7 +665,8 @@ def main():
         "platform": system,
         "stages": stages,
         "env": {
-            "OPENCLAW_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+            "DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+            "CLAUDE_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
             "DESKTOP_AGENT_OPS_PYTHON": python_exec,
         },
     }
@@ -640,7 +683,8 @@ def main():
         "stages": stages,
         "failed_stages": failed_stages,
         "env": {
-            "OPENCLAW_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+            "DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
+            "CLAUDE_DESKTOP_AGENT_OPS_HOME": str(DEFAULT_HOME),
             "DESKTOP_AGENT_OPS_PYTHON": python_exec,
         },
         "next_steps": (
@@ -659,8 +703,9 @@ def _build_next_steps(stages, system):
             steps.append("Install system deps: brew install cliclick tesseract")
         elif system == "windows":
             steps.append("Install system deps: choco install tesseract (via Chocolatey) or download from https://github.com/UB-Mannheim/tesseract/wiki")
+            steps.append("If Windows UI Automation cannot inspect the target app, retry with the same privilege level as the target process")
         elif system == "linux":
-            steps.append("Install system deps: sudo apt install xdotool wmctrl tesseract-ocr")
+            steps.append("Install system deps: sudo apt install xdotool wmctrl tesseract-ocr python3-pyatspi")
     if not stages.get("python_env", {}).get("ok"):
         steps.append("Install uv (curl -LsSf https://astral.sh/uv/install.sh | sh) then re-run")
     if not stages.get("permissions", {}).get("ok"):

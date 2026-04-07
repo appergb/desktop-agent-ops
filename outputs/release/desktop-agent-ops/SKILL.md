@@ -1,7 +1,7 @@
 ---
 name: desktop-agent-ops
-description: Execute cross-platform desktop tasks through a packaged desktop automation skill that guides the main agent to observe the screen, focus apps and windows, call helper scripts for screenshots and input actions, verify each step, clean up task context, and only escalate to multi-agent collaboration when tasks become clearly multi-window or multi-app. Use when the user wants desktop GUI control, native app operation, window focus, screenshots, click and type flows, or cross-platform desktop workflows on macOS, Windows, or Linux.
-version: 1.2.2
+description: Use when the user needs cross-platform desktop GUI control of a native app or window and no MCP server, native CLI, or OS API can safely complete the task.
+version: 1.4.0
 metadata:
   openclaw:
     requires:
@@ -13,127 +13,78 @@ metadata:
       brew: [cliclick]
 ---
 
-# Desktop Agent Ops
+> This is the detailed reference manual. For the quick operations guide, see `desktop-agent-ops.md`.
 
-Use this skill as a **main-agent operating manual** for desktop GUI tasks.
+# Desktop Agent Ops — Detailed Reference Manual
 
 ---
 
-## IMPORTANT: Tool Priority — When to Use This Skill
+## Table of Contents
 
-**This skill is NOT the first choice.** Before using desktop screen recognition, always try higher-level tools first:
+- [Tool Priority](#tool-priority)
+- [Auto-setup Gate](#auto-setup-gate)
+- [Core Execution Loop](#core-execution-loop)
+- [Smart Targeting with Four-Layer Fallback](#smart-targeting-with-four-layer-fallback)
+- [Failure Recovery](#failure-recovery)
+- [Generalization: How to Apply This to ANY App](#generalization-how-to-apply-this-to-any-app)
+- [Text Input and Send Rules](#text-input-and-send-rules)
+- [DPI / HiDPI / Retina](#dpi--hidpi--retina)
+- [CLI Reference](#cli-reference-key-commands-with-full-parameters)
+- [Workflow Examples](#workflow-examples)
+- [Reference Documents](#reference-documents)
+- [Scope](#scope)
+- [Hard Rules](#hard-rules)
+- [Custom Workflows](#custom-workflows)
 
-### Priority order (MUST follow):
+---
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Priority 1: MCP Servers & Structured APIs                          │
-│   If an MCP server can control the target app → USE IT FIRST       │
-│   Examples:                                                         │
-│   - Browser automation → use chrome-devtools MCP (navigate, click,  │
-│     fill, screenshot via CDP)                                       │
-│   - File operations → use filesystem tools directly                 │
-│   - Database queries → use database MCP                             │
-│   - Slack/GitHub/Notion → use their respective MCP servers          │
-│   WHY: Structured APIs are faster, more reliable, no OCR needed     │
-├─────────────────────────────────────────────────────────────────────┤
-│ Priority 2: Native CLI / AppleScript / OS APIs                      │
-│   If the app has a CLI or scriptable interface → USE IT             │
-│   Examples:                                                         │
-│   - `open -a "App"` to launch apps                                  │
-│   - `osascript` for AppleScript-automatable apps                    │
-│   - `defaults` for system settings                                  │
-│   WHY: Direct control, no screen parsing needed                     │
-├─────────────────────────────────────────────────────────────────────┤
-│ Priority 3: Desktop Agent Ops (THIS SKILL)                          │
-│   Use ONLY when:                                                    │
-│   - No MCP server exists for the target app                         │
-│   - The app has no CLI or scriptable API                            │
-│   - The task requires visual GUI interaction that cannot be done     │
-│     through any structured interface                                │
-│   Examples:                                                         │
-│   - WeChat desktop (no API, no MCP)                                 │
-│   - Native desktop apps with no automation support                  │
-│   - Any app where you must "see the screen and click"               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+## Tool Priority
 
-### Decision checklist before using this skill:
-
-1. **Is there an MCP server** for this app? (check available MCP tools) → If yes, use MCP
-2. **Does the app have a CLI** or API? → If yes, use that
-3. **Can AppleScript/osascript control it?** → If yes, use that
-4. **None of the above work?** → Use this skill (Desktop Agent Ops)
+Use this skill ONLY as Priority 3 — after MCP servers/structured APIs (Priority 1) and native CLI/AppleScript (Priority 2). See `desktop-agent-ops.md` section 1 for the full decision framework.
 
 > **Rule: Never use screen OCR to do what a structured API can do.**
-> Opening a URL in Chrome via `chrome-devtools MCP navigate` is always better than
-> OCR-finding the address bar and typing into it.
 
 ---
 
-## MANDATORY: Auto-setup gate (FIRST ACTION, every time)
+## Auto-setup Gate
 
-```bash
-python3 <SKILL_DIR>/scripts/first_run_setup.py --check
-```
-
-If `"ready": false`, run setup (installs EVERYTHING automatically):
-
-```bash
-python3 <SKILL_DIR>/scripts/first_run_setup.py
-```
-
-**Auto-installs on first run:**
-1. Platform detection (macOS / Windows / Linux)
-2. `cliclick` (macOS via brew; Linux: xdotool/wmctrl guide printed)
-3. Python venv + platform-specific dependencies (via uv or pip):
-   - **macOS**: pyobjc (Accessibility API + Vision OCR) + pillow, pyautogui, opencv-python, numpy
-   - **Windows/Linux**: pytesseract + pillow, pyautogui, opencv-python, numpy
-4. OCR setup: macOS uses Vision Framework (built-in, no Tesseract needed); Linux/Windows uses Tesseract
-5. OS permissions (Screen Recording, Accessibility, Automation) with auto-open System Settings
-6. Smoke test (screenshot + mouse move verification)
-
-After setup, set `$PY` for ALL subsequent calls:
-```
-PY=<output.env.DESKTOP_AGENT_OPS_PYTHON>
-```
-
-**Do NOT proceed if setup is not ready.**
+Run `first_run_setup.py --check` at session start. If not ready, run `first_run_setup.py` to auto-install all dependencies. Then set `$PY`. See `desktop-agent-ops.md` section 2 for details.
 
 ---
 
 ## Core Execution Loop
 
-Every desktop task follows this loop. No exceptions.
-
 ```
- 1. auto-setup gate           ← run once per session
- 2. init task context          ← create isolated temp directory
- 3. FOCUS the target app       ← bring app to front, confirm frontmost
- 4. GET window bounds          ← know exact position and size
- 5. CAPTURE that window        ← screenshot ONLY the target window
- 6. ANALYZE the capture        ← read screenshot or run OCR
- 7. LOCATE target via OCR      ← find text/button within window bounds
- 8. VERIFY before acting       ← move cursor, screenshot with cursor, confirm
- 9. EXECUTE one action         ← click, type, scroll, press key
-10. CAPTURE again              ← screenshot to see result
-11. VERIFY the result          ← did the UI change as expected?
-12. → if more steps, go to 5
-13. CLEANUP                    ← remove task temp directory
+FOCUS → LOCATE (accessibility/OCR) → BOUNDS-CHECK → MOVE → READBACK → EXECUTE → VERIFY
 ```
 
-**Key principles:**
-- One action at a time. Never chain blind actions.
-- Always verify after each action. If verification fails, recapture and retry — do NOT guess.
-- Always work within a specific window. Never click based on full-screen assumptions.
+**CRITICAL RULE: Click coordinates MUST come from accessibility or OCR output — NEVER from visual estimation of screenshots.** Models frequently confuse left/right and misjudge pixel distances. Structured accessibility and OCR output return exact pixel coordinates.
+
+**CRITICAL RULE: Move → Readback → Click.** Before every click, move the cursor first, read back `mouse-position`, verify the offset is ≤ 5px, then click. Never click without readback.
+
+**CRITICAL RULE: Re-locate before every click in multi-step tasks.** Window positions, dialog states, and UI layouts change between steps. Never reuse coordinates from a previous step.
+
+See `desktop-agent-ops.md` section 3 for the full 7-step mandatory loop.
 
 ---
 
-## Smart Targeting with Three-Layer Fallback
+## Smart Targeting with Four-Layer Fallback
 
 **NEVER do OCR or clicking on a full-screen screenshot.** Always scope to the target app window.
 
-### Three-Layer Targeting Pipeline
+**ACCESSIBILITY-FIRST PRINCIPLE**: Use `accessibility_provider.py` as the cross-platform direct query path. It dispatches to macOS AXUIElement, Windows UI Automation, or Linux AT-SPI and returns structured JSON with zero screenshot overhead. Only fall to OCR for accessibility-degraded apps (WeChat, QQ, Electron) or when you need visual content.
+
+```bash
+# Direct accessibility query — no screenshot, structured coordinates
+$PY scripts/accessibility_provider.py --app "AppName" --text "target text"
+
+# Inspect full UI tree — understand app structure without any screenshot
+$PY scripts/accessibility_provider.py --app "AppName" --elements
+```
+
+On macOS, `ax_provider.py` remains available as a direct backend when you specifically need raw AX data.
+
+### Four-Layer Targeting Pipeline
 
 `target_resolver.py` automatically selects the best targeting method:
 
@@ -141,10 +92,13 @@ Every desktop task follows this loop. No exceptions.
 ┌────────────────────────────────────────────────────────────┐
 │ Layer 1: ACCESSIBILITY API (fastest, most accurate)        │
 │   macOS: AXUIElement via PyObjC                            │
+│   Windows: UI Automation via PowerShell/.NET               │
+│   Linux: AT-SPI via pyatspi (GNOME first-class)            │
 │   → Queries UI element tree directly, no screenshot needed │
 │   → Returns role, title, position, size for each element   │
-│   → 100% text accuracy, native CJK, ~34ms                 │
-│   → Auto-degrades if element_count < 10 (WeChat, QQ, etc.)│
+│   → Returns exact element coordinates when the tree exists │
+│   → Auto-degrades if element_count < 10 or the platform    │
+│     blocks accessibility (WeChat, QQ, Electron, UIPI, etc.)│
 ├────────────────────────────────────────────────────────────┤
 │ Layer 2: SYSTEM OCR (fast, no external deps)               │
 │   macOS: Apple Vision Framework                            │
@@ -166,9 +120,11 @@ Every desktop task follows this loop. No exceptions.
 
 | App type | What happens |
 |----------|-------------|
-| Finder, Safari, Notes, System Settings | Layer 1 (Accessibility) finds elements in ~34ms |
+| Finder, Safari, Notes, System Settings | Layer 1 (Accessibility) finds elements immediately |
+| Native Windows apps (Notepad, Calculator) | Layer 1 (UIA) usually works when privileges match |
+| GNOME apps with AT-SPI enabled | Layer 1 (AT-SPI) works without screenshots |
 | WeChat, QQ, Electron apps | Layer 1 detects < 10 elements → auto-falls to Layer 2 (Vision OCR) |
-| Linux / Windows apps | Layer 2 skipped → Layer 3 (Tesseract) |
+| Linux or Windows apps without usable accessibility | Layer 2 skipped or blocked → Layer 3 (Tesseract) |
 | Icons without text | Layer 4 (template match) |
 
 ### Shortcut (RECOMMENDED for most targeting):
@@ -180,7 +136,7 @@ $PY scripts/target_resolver.py --app "AppName" --text "按钮文字" --python $P
 This single command: focuses app → tries Accessibility → falls back to OCR if needed → returns `best_candidate` with `{x, y, within_window, source}`.
 
 The `source` field tells you which layer found the target:
-- `"accessibility"` — found via AX element tree (fastest, most reliable)
+- `"accessibility"` — found via a structured accessibility tree (AX, UIA, or AT-SPI)
 - `"ocr_vision"` — found via Vision OCR (no Tesseract needed)
 - `"ocr_tesseract"` — found via Tesseract (fallback)
 
@@ -193,16 +149,22 @@ The `source` field tells you which layer found the target:
 
 ---
 
-## Failure Recovery (CRITICAL)
+## Failure Recovery
 
-When something fails, follow these rules:
+Max 3 retries per action. Each retry MUST recapture fresh state. See `desktop-agent-ops.md` section 5 for the quick reference table.
 
 ### OCR finds nothing
 1. Re-focus the app: `focus-app --name "AppName"`
 2. Re-get bounds: `front-window-bounds --app "AppName"` (window may have moved/resized)
 3. Take a fresh screenshot and read it visually
 4. Try a different region label (e.g. `content_area` instead of `bottom_input`)
-5. Try lowering OCR confidence: `--min-conf 30`
+5. Try lowering OCR confidence: `--min-conf 30` (for `ocr_text.py`) or `--ocr-min-conf 30` (for `target_resolver.py`)
+
+### Accessibility is blocked or degraded
+1. Re-run `platform_probe.py` and `doctor.py` to confirm the backend and blockers
+2. Windows: verify the agent and target app run at the same privilege level; elevated apps and UAC prompts may be blocked by UIPI
+3. Linux: verify GNOME/AT-SPI is available and `pyatspi` is installed; non-GNOME or restricted sessions may need OCR fallback
+4. If the tree is sparse (`element_count < 10`), treat it as degraded and continue with OCR instead of guessing
 
 ### Click doesn't work
 1. Screenshot with cursor to check cursor position
@@ -214,11 +176,6 @@ When something fails, follow these rules:
 1. ALWAYS re-get window bounds after any major UI change
 2. ALWAYS re-run OCR after navigation or state change
 3. Never reuse old coordinates — they may be stale
-
-### General retry rule
-- Maximum 3 retries per action
-- Each retry must recapture fresh state
-- If 3 retries fail, report the failure with screenshots and stop
 
 ---
 
@@ -301,25 +258,17 @@ $PY scripts/desktop_ops.py type --text "second line"
 
 ---
 
-## DPI / HiDPI / Retina (All Platforms)
+## DPI / HiDPI / Retina
 
-**Handled automatically.** No manual DPI work needed.
-
-| Platform | Common scales | Detection method |
-|----------|---------------|-----------------|
-| macOS Retina | 2.0x | screenshot pixels ÷ logical screen bounds |
-| Windows HiDPI | 1.25x, 1.5x, 2.0x | screenshot pixels ÷ pyautogui.size() |
-| Linux X11 | 1.0x, 1.5x, 2.0x | screenshot pixels ÷ pyautogui.size() |
-
-OCR output: `box` = logical (use for mouse), `pixel_box` = raw pixels, `dpi_scale` = factor.
+Handled automatically. OCR returns logical coordinates (use for mouse); `pixel_box` = raw pixels; `dpi_scale` = factor. No manual DPI work needed.
 
 ---
 
-## CLI Quick Reference (EXACT parameter names)
+## CLI Reference (Key Commands with Full Parameters)
 
-**CRITICAL**: Use EXACTLY these names. Do NOT guess.
+For the complete quick reference of all commands, see `desktop-agent-ops.md` section 8.
 
-### desktop_ops.py
+### desktop_ops.py (full parameter reference)
 
 ```bash
 $PY scripts/desktop_ops.py screenshot [--output PATH] [--x X --y Y --width W --height H] [--with-cursor]
@@ -342,17 +291,13 @@ $PY scripts/desktop_ops.py screen-size
 $PY scripts/desktop_ops.py pixel-color --x X --y Y
 ```
 
-### ax_provider.py (macOS Accessibility API)
+### target_resolver.py (four-layer smart targeting)
 
 ```bash
-$PY scripts/ax_provider.py --app "AppName" --text "text" [--text-match contains|exact|regex] [--max-depth 6]
-$PY scripts/ax_provider.py --app "AppName" --text "text" --elements  # include full element tree
-```
-
-### vision_ocr.py (macOS Vision Framework OCR)
-
-```bash
-$PY scripts/vision_ocr.py --image /path/to/capture.png [--lang zh-Hans,en-US] [--level fast|accurate]
+$PY scripts/target_resolver.py --app "AppName" --text "text" --python $PY
+$PY scripts/target_resolver.py --app "AppName" --template /path/icon.png --python $PY
+$PY scripts/target_resolver.py --app "AppName" --text "text" --region-label LABEL --python $PY
+$PY scripts/target_resolver.py --app "AppName" --text "text" --providers "accessibility,ocr_text" --python $PY
 ```
 
 ### ocr_text.py (multi-backend OCR)
@@ -362,129 +307,39 @@ $PY scripts/ocr_text.py --app "AppName" --python $PY [--region-label LABEL] [--b
 $PY scripts/ocr_text.py --image /path/to/capture.png --python $PY [--backend auto]
 ```
 
-### target_resolver.py (three-layer smart targeting)
-
-```bash
-$PY scripts/target_resolver.py --app "AppName" --text "text" --python $PY
-$PY scripts/target_resolver.py --app "AppName" --template /path/icon.png --python $PY
-$PY scripts/target_resolver.py --app "AppName" --text "text" --region-label LABEL --python $PY
-# Provider order (default: accessibility first):
-$PY scripts/target_resolver.py --app "AppName" --text "text" --providers "accessibility,ocr_text" --python $PY
-```
-
-### task_context.py / cleanup_task.py
-
-```bash
-$PY scripts/task_context.py init --task-id "my-task"   # aliases: create, --name
-$PY scripts/task_context.py show --task-id "my-task"
-$PY scripts/cleanup_task.py --task-id "my-task"
-```
-
-### platform_probe.py (platform detection)
-
-```bash
-$PY scripts/platform_probe.py
-```
-
-Returns `{"ok": true, "platform": "darwin"|"windows"|"linux", "linux_session": "x11"|"wayland"|null}`.
-Run before any platform-conditional logic.
-
-### target_report.py (region candidate points)
-
-```bash
-$PY scripts/target_report.py --app "AppName" --label LABEL --python $PY
-```
-
-Returns `{ok, window, region, mouse, candidates[]}` — a list of candidate click coordinates
-(center, upper_middle, lower_middle, left_middle, right_middle) for the named region.
-Used internally by `target_resolver.py` and `click_and_verify.py`.
-
-### doctor.py (health diagnostics)
-
-```bash
-$PY scripts/doctor.py
-```
-
-Checks deps (pyautogui, PIL, pytesseract, cv2, tesseract binary), permission state,
-and runs live smoke checks (frontmost, screenshot, mouse move).
-Run when `first_run_setup.py` smoke test fails.
-
-### window_regions.py
-
-```bash
-$PY scripts/window_regions.py --window-x X --window-y Y --window-width W --window-height H [--label LABEL]
-```
-
-Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `content_area`, `toolbar_row`, `bottom_input`, `primary_action`
-
 ---
 
 ## Workflow Examples
 
-### Example 1: Click a button by text (any app)
+### Example: Send a chat message (WeChat, Slack, etc.)
+
+> **IMPORTANT: Before starting, discover the correct app name dynamically.**
+> 1. Run `desktop_ops.py list-apps` to see all running apps
+> 2. Find the chat app name (e.g. "微信", "WeChat", "Slack")
+> 3. Use that exact name in all --app arguments below
 
 ```
-1. $PY first_run_setup.py --check                           → ready: true
-2. $PY task_context.py init --task-id "click-button"
-3. $PY desktop_ops.py focus-app --name "AppName"
-4. $PY desktop_ops.py front-window-bounds --app "AppName"    → {x, y, w, h}
-5. $PY target_resolver.py --app "AppName" --text "OK" --python $PY
-   → best_candidate: {x:450, y:520, within_window:true}
-6. $PY desktop_ops.py move --x 450 --y 520
-7. $PY desktop_ops.py screenshot --with-cursor               → verify cursor on "OK"
-8. $PY desktop_ops.py click --x 450 --y 520
-9. $PY desktop_ops.py screenshot                             → verify result
-10. $PY cleanup_task.py --task-id "click-button"
-```
-
-### Example 2: Type and search
-
-```
-1. $PY desktop_ops.py focus-app --name "Safari"
-2. $PY target_resolver.py --app "Safari" --text "Search" --region-label top_search --python $PY
-   → {x:300, y:80, within_window:true}
-3. $PY desktop_ops.py click --x 300 --y 80
-4. $PY desktop_ops.py type --text "hello world"
-5. $PY desktop_ops.py press --key return
-6. $PY desktop_ops.py screenshot                             → verify search results
-```
-
-### Example 3: Send a chat message (WeChat, Slack, etc.)
-
-```
-1. $PY desktop_ops.py focus-app --name "WeChat"
-2. $PY desktop_ops.py front-window-bounds --app "WeChat"
+0. $PY desktop_ops.py list-apps  → find the chat app name (e.g. "WeChat" or "微信")
+1. $PY desktop_ops.py focus-app --name "$CHAT_APP"   ← replace with discovered name
+2. $PY desktop_ops.py front-window-bounds --app "$CHAT_APP"
 3. # Navigate to the right conversation (OCR sidebar or search)
-4. $PY target_resolver.py --app "WeChat" --text "ContactName" --region-label left_sidebar --python $PY
+4. $PY target_resolver.py --app "$CHAT_APP" --text "ContactName" --region-label left_sidebar --python $PY
 5. $PY desktop_ops.py click --x <found_x> --y <found_y>
 6. # Verify conversation is open
 7. $PY desktop_ops.py screenshot → confirm conversation title
 8. # Click the input field
-9. $PY target_resolver.py --app "WeChat" --text "" --region-label bottom_input --python $PY
+9. $PY target_resolver.py --app "$CHAT_APP" --text "" --region-label bottom_input --python $PY
 10. $PY desktop_ops.py click --x <found_x> --y <found_y>
 11. $PY desktop_ops.py type --text "Hello!"
 12. $PY desktop_ops.py screenshot → verify typed text visible in composer
 13. # Send: MUST use --region-label to avoid matching message text that contains "发送"
-14. $PY target_resolver.py --app "WeChat" --text "发送" --region-label primary_action --python $PY
+14. $PY target_resolver.py --app "$CHAT_APP" --text "发送" --region-label primary_action --python $PY
     IF found: $PY desktop_ops.py click --x <x> --y <y>
     ELSE: $PY desktop_ops.py press --key return
 15. $PY desktop_ops.py screenshot → verify message sent
 ```
 
-### Example 4: Scroll a list and find an item
-
-```
-1. $PY desktop_ops.py focus-app --name "AppName"
-2. $PY desktop_ops.py front-window-bounds --app "AppName"   → {x:100, y:50, w:800, h:600}
-3. # Scroll down in the window center
-   $PY desktop_ops.py scroll --amount -5 --x 500 --y 350
-4. $PY desktop_ops.py screenshot                             → check if target visible
-5. $PY target_resolver.py --app "AppName" --text "target item" --python $PY
-6. IF not found: scroll more and retry (max 5 scrolls)
-7. IF found: click it
-```
-
-### Example 5: Handle an unexpected dialog
+### Example: Handle an unexpected dialog
 
 ```
 1. # During any operation, if the expected UI doesn't match:
@@ -502,109 +357,69 @@ Labels: `top_search`, `left_sidebar`, `left_sidebar_top`, `title_header`, `conte
 
 ## Reference Documents
 
-**MUST-read rules**: Read the matching reference BEFORE starting the task. Do not skip.
+See `desktop-agent-ops.md` section 12 for the complete on-demand reference table. Key references:
 
 | Document | When to read |
 |----------|-------------|
-| `references/workflow.md` | Core 8-step closed loop |
+| `references/workflow.md` | Core task lifecycle (macro-level) |
 | `references/platform-macos.md` | **MUST** when running on macOS |
-| `references/platform-windows.md` | **MUST** when running on Windows |
-| `references/platform-linux.md` | **MUST** when running on Linux |
-| `references/operation-patterns.md` | Reusable task templates |
-| `references/validation-patterns.md` | **MUST** when task involves send, delete, or other destructive actions |
-| `references/precise-targeting.md` | **MUST** when OCR finds nothing or click misses target |
-| `references/target-providers.md` | Provider ordering and fallback contract |
-| `references/coordinate-reconstruction.md` | Rebuild click coordinates from screenshot evidence |
-| `references/chat-app-macos.md` | **MUST** when target app is a chat app (WeChat, Slack, Telegram, etc.) |
-| `references/app-wechat-desktop.md` | **MUST** when target app is WeChat |
-| `references/cleanup-rules.md` | Cleanup timing and scope |
-| `references/collaboration-rules.md` | When multi-agent collaboration is justified |
-| `references/example-cases.md` | Repeatable task examples |
-| `references/reproducible-setup.md` | Host bring-up checklist |
+| `references/platform-windows.md` | When running on Windows |
+| `references/platform-linux.md` | When running on Linux |
+| `references/precise-targeting.md` | **MUST** when OCR finds nothing or click misses |
+| `references/target-providers.md` | Accessibility vs OCR vs Tesseract provider selection |
+| `references/chat-app-macos.md` | **MUST** when target is a chat app |
+| `references/app-wechat-desktop.md` | **MUST** when target is WeChat |
+| `references/app-wechat-macos.md` | WeChat macOS compatibility pointer |
+| `references/app-wechat-windows.md` | WeChat Windows compatibility pointer |
+| `references/validation-patterns.md` | **MUST** for send, delete, or destructive actions |
+| `references/operation-patterns.md` | Reusable operation patterns |
+| `references/coordinate-reconstruction.md` | Rebuilding coordinates from screenshots |
+| `references/collaboration-rules.md` | Multi-agent collaboration |
+| `references/custom-workflows.md` | Authoring and running workflows |
+| `references/cleanup-rules.md` | **MUST** cleanup rules at task end |
+| `references/reproducible-setup.md` | Cross-host reproducible setup |
+| `references/eval-scenarios.md` | Skill evaluation scenarios |
+| `references/example-cases.md` | Public-safe repeatable examples |
+| `references/app-names.md` | App name patterns: macOS process names vs Windows window titles, discovery rules |
+| `references/market-precision-targeting-gap-analysis.md` | Precision targeting gaps |
+
+---
 
 ## Scope
 
-**Use this skill ONLY when no structured API (MCP, CLI, AppleScript) can accomplish the task.**
+Use this skill ONLY when no structured API (MCP, CLI, AppleScript) can accomplish the task. Typical targets: chat apps (WeChat, QQ), native desktop apps without automation APIs, System Settings, any closed software where you must "see and click".
 
-Typical use cases:
-- Chat apps with no API (WeChat, QQ, Telegram desktop)
-- Native desktop apps with no automation support
-- System Settings / Preferences navigation
-- Any closed desktop software where you must "see and click"
-
-**Do NOT use this skill for:**
-- Browser automation → use `chrome-devtools` MCP instead
-- File operations → use filesystem tools directly
-- Apps with MCP servers → use MCP
-- Tasks achievable via CLI or AppleScript
+---
 
 ## Hard Rules
 
 1. **MCP/API first: never use screen recognition when a structured tool can do the job**
-2. **Always run auto-setup gate first**
-3. **Always use EXACT parameter names from CLI reference — never guess**
-4. **Always scope targeting to the target app window — NEVER full-screen**
-5. **Always: focus-app → front-window-bounds → target (AX or OCR) → verify → act**
-6. **Always pass `--python $PY` to ocr_text.py and target_resolver.py**
-7. **Always verify coordinates are within window bounds before clicking**
-8. **Always re-get window bounds after any UI state change (login, dialog, navigation)**
-9. **Use `insert-newline` for line breaks; never use `\n` in `type --text`**
-10. **For send actions: prefer visible send button; use `press --key return` only when verified**
-11. **One action at a time; verify after each**
-12. **Maximum 3 retries per action; each retry must recapture fresh state**
-13. **Cleanup is mandatory at task end**
-14. **If verification fails, recapture and rebuild — do not retry blindly**
+2. **Accessibility before screenshot: use the platform accessibility tree to locate targets before taking screenshots — structured output costs ~200 tokens; a screenshot costs 30,000-60,000 tokens**
+3. **NEVER estimate click coordinates from screenshots — always use accessibility or OCR output values. Models confuse left/right and misjudge distances. This is the #1 cause of click errors.**
+4. **Move → Readback → Click: always move first, read back mouse-position, verify offset ≤ 5px, then click. Never click without readback.**
+5. **Re-locate before every click in multi-step tasks — never reuse stale coordinates from a previous step**
+6. **For close/quit: prefer CLI/AppleScript/process APIs; only click if no API exists, and use the platform accessibility tree to get the exact close button position at pixel level**
+7. **Always run auto-setup gate first**
+8. **Always use EXACT parameter names from CLI reference — never guess**
+9. **Always scope targeting to the target app window — NEVER full-screen**
+10. **Always: focus-app → front-window-bounds → accessibility/OCR locate → bounds-check → move → readback → click → verify**
+11. **Always pass `--python $PY` to ocr_text.py and target_resolver.py**
+12. **Always verify coordinates are within window bounds before clicking**
+13. **Always re-get window bounds after any UI state change (login, dialog, navigation)**
+14. **Use `insert-newline` for line breaks; never use `\n` in `type --text`**
+15. **For send actions: prefer visible send button; use `press --key return` only when verified**
+16. **One action at a time; verify after each**
+17. **Maximum 3 retries per action; each retry must recapture fresh state**
+18. **Cleanup is mandatory at task end**
+19. **If verification fails, recapture and rebuild — do not retry blindly**
+20. **Discard old screenshots from context after each action — only analyze the current capture. Prefer region captures over full-screen.**
 
 ---
 
 ## Custom Workflows
 
-Users can create reusable multi-step workflows and share them with the community.
+Users can create reusable multi-step workflows. See `references/custom-workflows.md` for full details on workflow CLI, safety review protocol, and sharing.
 
-### Workflow CLI
-
-```bash
-# List available workflows (built-in + user-created)
-$PY scripts/workflow_runner.py list
-
-# Show workflow details
-$PY scripts/workflow_runner.py show --workflow "send-chat-message"
-
-# Validate a workflow (format check)
-$PY scripts/workflow_runner.py validate --workflow "send-chat-message"
-
-# Preview resolved commands (for safety review before execution)
-$PY scripts/workflow_runner.py preview --workflow "send-chat-message" --param contact="John" --param message="Hello"
-
-# Run a workflow
-$PY scripts/workflow_runner.py run --workflow "send-chat-message" --param contact="John" --param message="Hello"
-
-# Share a workflow to the community via GitHub PR
-$PY scripts/workflow_share.py share --workflow "send-chat-message"
-```
-
-### Agent Safety Review Protocol
-
-Before running any workflow, the agent MUST:
-1. Call `preview` to see all resolved commands
-2. Review each command using your own reasoning — judge whether it is safe
-3. If any command looks risky (deletion, network exfiltration, system config changes), explain the risk to the user and ask for confirmation
-4. Only call `run` after confirming safety
-
-This is NOT a whitelist approach — workflows can contain any command for maximum extensibility. Safety relies on the agent's judgment, not hardcoded rules.
-
-### Workflow File Location
-
-- Built-in workflows: `skill/workflows/`
-- User workflows: `~/.openclaw-desktop-agent-ops/workflows/`
-- User workflows override built-in ones with the same name
-
-### Sharing Workflows
-
-After a user creates a custom workflow, ask: "Workflow validated. Would you like to share it with the community?"
-
-If yes, run `workflow_share.py share --workflow "name"`. The script will:
-1. Validate workflow format
-2. Scan for sensitive information (API keys, passwords, personal paths are blocked)
-3. Fork the repo and create a GitHub PR to contribute the workflow
-4. Return the PR URL to the user
+Workflow locations:
+- Built-in: `skill/workflows/`
+- User-created: `~/.claude/desktop-agent-ops/workflows/`

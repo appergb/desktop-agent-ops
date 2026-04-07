@@ -231,14 +231,17 @@ def _detect_dpi_scale(python_exec):
         logical_w = screen.get("width", 0)
         if logical_w <= 0:
             return 1.0
-        tmp = tempfile.mktemp(prefix="dpi-probe-", suffix=".png")
-        run_json([python_exec, str(desktop_ops), "screenshot", "--output", tmp])
-        img = Image.open(tmp)
-        pixel_w = img.width
+        fd, tmp = tempfile.mkstemp(prefix="dpi-probe-", suffix=".png")
+        os.close(fd)
         try:
-            Path(tmp).unlink(missing_ok=True)
-        except Exception:
-            pass
+            run_json([python_exec, str(desktop_ops), "screenshot", "--output", tmp])
+            img = Image.open(tmp)
+            pixel_w = img.width
+        finally:
+            try:
+                Path(tmp).unlink(missing_ok=True)
+            except Exception:
+                pass
         if pixel_w > 0 and logical_w > 0:
             ratio = pixel_w / logical_w
             return round(ratio * 2) / 2
@@ -272,7 +275,8 @@ def capture_region(app, region_label, python_exec):
             "width": bounds["width"], "height": bounds["height"],
         }
 
-    output = tempfile.mktemp(prefix="ocr-region-", suffix=".png")
+    fd, output = tempfile.mkstemp(prefix="ocr-region-", suffix=".png")
+    os.close(fd)
     cap = run_json([
         python_exec, str(desktop_ops), "capture-region",
         "--x", str(region["x"]), "--y", str(region["y"]),
@@ -333,9 +337,19 @@ def main():
         source = {"type": "capture", "app": args.app,
                   "region_label": args.region_label, "image": image_path}
 
-    # Run OCR with chosen backend
+    # Run OCR with chosen backend.
+    # Auto-fallback: if Vision returns very few boxes (≤ 2) and Tesseract
+    # finds significantly more, use Tesseract instead. This handles apps
+    # like WeChat whose custom font rendering is invisible to Vision
+    # Framework but readable by Tesseract's image-based OCR.
     if backend == "vision":
         boxes = extract_text_vision(image_path, args.min_conf, lang)
+        if len(boxes) <= 2 and _tesseract_available():
+            tess_lang = auto_detect_tess_lang()
+            tess_boxes = extract_text_tesseract(image_path, args.min_conf, tess_lang)
+            if len(tess_boxes) > len(boxes):
+                boxes = tess_boxes
+                backend = "tesseract_fallback"
     else:
         boxes = extract_text_tesseract(image_path, args.min_conf, lang)
 
